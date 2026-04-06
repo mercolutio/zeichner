@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 
 const client = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY?.trim(),
+  apiKey: process.env.ANTHROPIC_API_KEY?.replace(/\s/g, ""),
 });
 
 type ImageMediaType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
