@@ -54,29 +54,13 @@ function FloorPlan({ floor, maxWidth }: { floor: FloorData; maxWidth: number }) 
           fill="none" stroke="#1e293b" strokeWidth={2}
         />
 
-        {/* Void rooms (hatched) */}
-        <defs>
-          <pattern id={`void-hatch-${floor.id}`} patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-            <line x1="0" y1="0" x2="0" y2="8" stroke="#ef4444" strokeWidth={0.8} opacity={0.4} />
-          </pattern>
-        </defs>
+        {/* Void rooms — cut out from building outline (white fill to hide outline behind them) */}
         {voidRooms.map((room) => (
-          <g key={room.id}>
-            <rect
-              x={toX(room.x)} y={toY(room.z)}
-              width={room.width * scale} height={room.depth * scale}
-              fill={`url(#void-hatch-${floor.id})`}
-              stroke="#ef4444" strokeWidth={1} strokeDasharray="4,2"
-            />
-            <text
-              x={toX(room.x + room.width / 2)}
-              y={toY(room.z + room.depth / 2)}
-              textAnchor="middle" dominantBaseline="middle"
-              fontSize={10} fill="#ef4444" fontFamily="Helvetica, Arial, sans-serif"
-            >
-              {room.name} (Void)
-            </text>
-          </g>
+          <rect key={room.id}
+            x={toX(room.x)} y={toY(room.z)}
+            width={room.width * scale} height={room.depth * scale}
+            fill="white" stroke="none"
+          />
         ))}
 
         {/* Rooms */}
