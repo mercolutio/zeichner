@@ -134,8 +134,7 @@ export async function POST(request: NextRequest) {
       fileInputs.push({ base64, mediaType, filename: file.name });
     }
 
-    const rawResult = await analyzeFloorplan(fileInputs);
-    const result = AnalysisSchema.parse(rawResult);
+    const result = await analyzeFloorplan(fileInputs, AnalysisSchema);
 
     return NextResponse.json(result);
   } catch (error) {
