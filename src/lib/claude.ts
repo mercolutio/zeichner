@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 
-const client = new Anthropic();
+const client = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY?.trim(),
+});
 
 type ImageMediaType = "image/png" | "image/jpeg" | "image/webp" | "image/gif";
 type DocumentMediaType = "application/pdf";
