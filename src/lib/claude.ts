@@ -131,15 +131,12 @@ WICHTIG:
           max_tokens: 16384,
           temperature: 0.2,
           system: ANALYSIS_SYSTEM_PROMPT,
-          messages: [
-            { role: "user", content: baseContent },
-            { role: "assistant", content: [{ type: "text", text: "{" }] },
-          ],
+          messages: [{ role: "user", content: baseContent }],
         });
         const response = await stream.finalMessage();
-        responseText = "{" + getResponseText(response.content);
+        responseText = getResponseText(response.content);
       } else {
-        // Retry: no thinking (faster), lower temperature, prefill with {
+        // Retry with error feedback
         const retryMessage =
           `Dein vorheriger Versuch hatte einen Fehler: ${lastError?.message}\n\n` +
           `Bitte korrigiere das und antworte NUR mit validem JSON. Kein Markdown, keine Erklärungen.`;
@@ -155,12 +152,10 @@ WICHTIG:
               role: "user",
               content: [{ type: "text", text: retryMessage }],
             },
-            { role: "assistant", content: [{ type: "text", text: "{" }] },
           ],
         });
         const response = await stream.finalMessage();
-        // Prepend the { from prefill
-        responseText = "{" + getResponseText(response.content);
+        responseText = getResponseText(response.content);
       }
 
       const parsed = extractJSON(responseText);
