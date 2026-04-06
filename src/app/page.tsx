@@ -4,13 +4,12 @@ import { useState, useEffect, useCallback } from "react";
 import { BuildingData, createBuilding } from "@/types/building";
 import { buildingToAnalysis } from "@/lib/building-to-analysis";
 import dynamic from "next/dynamic";
-import CrossSection from "@/components/drawing/CrossSection";
-import IsometricView from "@/components/drawing/IsometricView";
+import FloorplanView from "@/components/drawing/FloorplanView";
 import AreaCalculation from "@/components/analysis/AreaCalculation";
 import FloorSummary from "@/components/analysis/FloorSummary";
 import RoomTable from "@/components/analysis/RoomTable";
 import PdfExportButton from "@/components/pdf/PdfExportButton";
-import { FileText, Box, Scissors, FileDown } from "lucide-react";
+import { FileText, Box, LayoutDashboard, FileDown } from "lucide-react";
 
 const BuildingEditor3D = dynamic(
   () => import("@/components/builder/BuildingEditor3D"),
@@ -77,7 +76,7 @@ export default function Home() {
 
   const tabs: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: "editor", label: "3D-Editor", icon: <Box className="w-4 h-4" /> },
-    { id: "sections", label: "Schnitte", icon: <Scissors className="w-4 h-4" /> },
+    { id: "sections", label: "Grundrisse", icon: <LayoutDashboard className="w-4 h-4" /> },
     { id: "result", label: "Ergebnis & PDF", icon: <FileDown className="w-4 h-4" /> },
   ];
 
@@ -124,10 +123,9 @@ export default function Home() {
 
         {activeTab === "sections" && (
           <div className="h-full overflow-y-auto p-6 space-y-6 bg-gray-50">
-            <div className="max-w-5xl mx-auto space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">Schnittzeichnungen</h2>
-              <CrossSection analysis={analysis} />
-              <IsometricView analysis={analysis} />
+            <div className="max-w-3xl mx-auto space-y-6">
+              <h2 className="text-2xl font-bold text-gray-900">Grundrisse</h2>
+              <FloorplanView building={building} />
             </div>
           </div>
         )}
