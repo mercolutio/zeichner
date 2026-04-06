@@ -118,9 +118,7 @@ export function createBuilding(): BuildingData {
         ],
       }),
     ],
-    roofSegments: [
-      createRoofSegment({ name: "Hauptdach", width: 10, depth: 8 }),
-    ],
+    roofSegments: [],
     roofType: "Satteldach",
     roofPitchDegrees: 35,
   };
