@@ -303,12 +303,13 @@ function FloorSlab({ width, depth, y, floorIndex, selected, isDragging, onPointe
 }
 
 // ── Roof Segment 3D ──
-function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown }: {
+function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown, onUpdate }: {
   segment: RoofSegment;
   baseY: number;
   selected: boolean;
   isDragging: boolean;
   onPointerDown: (e: ThreeEvent<PointerEvent>) => void;
+  onUpdate: (updates: Partial<RoofSegment>) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const { type, pitchDegrees, rotation: rotDeg, x, z, width, depth } = segment;
@@ -377,6 +378,104 @@ function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown }: 
           </div>
         </Html>
       )}
+
+      {/* Transform handles when selected */}
+      {selected && !isDragging && (
+        <RoofTransformHandles
+          width={width} depth={depth} roofHeight={roofHeight} baseY={baseY}
+          onUpdate={onUpdate}
+        />
+      )}
+    </group>
+  );
+}
+
+// ── Roof Transform Handles (resize corners + rotation ring) ──
+function RoofTransformHandles({ width, depth, roofHeight, baseY, onUpdate }: {
+  width: number; depth: number; roofHeight: number; baseY: number;
+  onUpdate: (updates: Partial<RoofSegment>) => void;
+}) {
+  const handleSize = 0.2;
+  const y = baseY + 0.1;
+
+  // Corner/edge handles for resizing
+  const resizeHandles: { id: string; pos: [number, number, number]; axis: "x" | "z" | "xz"; color: string }[] = [
+    { id: "right", pos: [width / 2, y, 0], axis: "x", color: "#ef4444" },
+    { id: "left", pos: [-width / 2, y, 0], axis: "x", color: "#ef4444" },
+    { id: "front", pos: [0, y, depth / 2], axis: "z", color: "#3b82f6" },
+    { id: "back", pos: [0, y, -depth / 2], axis: "z", color: "#3b82f6" },
+    { id: "corner-rf", pos: [width / 2, y, depth / 2], axis: "xz", color: "#f59e0b" },
+    { id: "corner-lb", pos: [-width / 2, y, -depth / 2], axis: "xz", color: "#f59e0b" },
+    { id: "corner-rb", pos: [width / 2, y, -depth / 2], axis: "xz", color: "#f59e0b" },
+    { id: "corner-lf", pos: [-width / 2, y, depth / 2], axis: "xz", color: "#f59e0b" },
+  ];
+
+  // Rotation handle — torus above the roof
+  const rotY = baseY + roofHeight + 0.4;
+
+  return (
+    <group>
+      {/* Resize handles */}
+      {resizeHandles.map((h) => (
+        <mesh key={h.id} position={h.pos}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            const startX = e.point.x;
+            const startZ = e.point.z;
+            const startW = width;
+            const startD = depth;
+
+            const onMove = (ev: PointerEvent) => {
+              const dx = (ev.clientX - (e.nativeEvent as PointerEvent).clientX) * 0.02;
+              const dz = (ev.clientY - (e.nativeEvent as PointerEvent).clientY) * 0.02;
+              if (h.axis === "x" || h.axis === "xz") {
+                const sign = h.id.includes("left") || h.id.includes("lb") || h.id.includes("lf") ? -1 : 1;
+                onUpdate({ width: Math.max(1, snapValue(startW + dx * sign)) });
+              }
+              if (h.axis === "z" || h.axis === "xz") {
+                const sign = h.id.includes("back") || h.id.includes("lb") || h.id.includes("rb") ? 1 : -1;
+                onUpdate({ depth: Math.max(1, snapValue(startD + dz * sign)) });
+              }
+            };
+            const onUp = () => {
+              window.removeEventListener("pointermove", onMove);
+              window.removeEventListener("pointerup", onUp);
+            };
+            window.addEventListener("pointermove", onMove);
+            window.addEventListener("pointerup", onUp);
+          }}>
+          <boxGeometry args={[handleSize, handleSize, handleSize]} />
+          <meshStandardMaterial color={h.color} />
+        </mesh>
+      ))}
+
+      {/* Rotation handle — ring */}
+      <mesh position={[0, rotY, 0]} rotation={[Math.PI / 2, 0, 0]}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          const startClientX = (e.nativeEvent as PointerEvent).clientX;
+          const startRot = 0;
+
+          const onMove = (ev: PointerEvent) => {
+            const dx = ev.clientX - startClientX;
+            const newRot = Math.round(dx * 0.5); // ~0.5 deg per pixel
+            onUpdate({ rotation: ((startRot + newRot) % 360 + 360) % 360 });
+          };
+          const onUp = () => {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onUp);
+          };
+          window.addEventListener("pointermove", onMove);
+          window.addEventListener("pointerup", onUp);
+        }}>
+        <torusGeometry args={[Math.max(width, depth) * 0.4, 0.06, 8, 32]} />
+        <meshStandardMaterial color="#10b981" opacity={0.8} transparent />
+      </mesh>
+      {/* Rotation arrow indicator */}
+      <mesh position={[Math.max(width, depth) * 0.4, rotY, 0]}>
+        <coneGeometry args={[0.12, 0.25, 6]} />
+        <meshStandardMaterial color="#10b981" />
+      </mesh>
     </group>
   );
 }
@@ -425,6 +524,7 @@ function Scene({
   onRoomMoveTo,
   onDragStart,
   onDragEnd,
+  onRoofUpdate,
 }: {
   building: BuildingData;
   selectedRoom: string | null;
@@ -437,6 +537,7 @@ function Scene({
   onRoomMoveTo: (x: number, z: number) => void;
   onDragStart: (roomId: string, floorId: string, offsetX: number, offsetZ: number) => void;
   onDragEnd: () => void;
+  onRoofUpdate: (roofId: string, updates: Partial<RoofSegment>) => void;
 }) {
   const controlsRef = useRef<any>(null);
   const EXPLODE_GAP = 1.5;
@@ -589,6 +690,7 @@ function Scene({
             onSelectRoom(`roof:${seg.id}`);
             onDragStart(`roof:${seg.id}`, "", e.point.x - seg.x, e.point.z - seg.z);
           }}
+          onUpdate={(updates) => onRoofUpdate(seg.id, updates)}
         />
       ))}
 
@@ -1066,19 +1168,57 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
         return;
       }
 
-      // Dragging a roof segment
+      // Dragging a roof segment — snap to floor edges and other roofs
       if (dragRoomId.startsWith("roof:")) {
         const roofId = dragRoomId.slice(5);
         const seg = building.roofSegments.find((s) => s.id === roofId);
         if (!seg) return;
 
-        const snapped = snapWithGuides(rawX, rawZ, seg.width, seg.depth, bWidth, bDepth, []);
-        setSnapGuides({ x: snapped.guidesX, z: snapped.guidesZ, floorY: building.floors.reduce((s, f) => s + f.ceilingHeight, 0), height: 1 });
+        let sx = snapValue(rawX);
+        let sz = snapValue(rawZ);
+        const gx: number[] = [];
+        const gz: number[] = [];
+        const threshold = 0.3;
+
+        // Snap to origin
+        if (Math.abs(sx) < threshold) { sx = 0; gx.push(0); }
+        if (Math.abs(sz) < threshold) { sz = 0; gz.push(0); }
+
+        // Collect all edges: floors + other roofs
+        const allEdgesX: number[] = [];
+        const allEdgesZ: number[] = [];
+        for (const f of building.floors) {
+          const fx = f.x || 0;
+          const fz = f.z || 0;
+          allEdgesX.push(fx, fx + f.width);
+          allEdgesZ.push(fz, fz + f.depth);
+        }
+        for (const other of building.roofSegments) {
+          if (other.id === roofId) continue;
+          allEdgesX.push(other.x, other.x + other.width);
+          allEdgesZ.push(other.z, other.z + other.depth);
+        }
+
+        const myEdgesX = [sx, sx + seg.width];
+        const myEdgesZ = [sz, sz + seg.depth];
+        for (const e of allEdgesX) {
+          for (const m of myEdgesX) {
+            if (Math.abs(m - e) < threshold) { sx += e - m; gx.push(e); }
+          }
+        }
+        for (const e of allEdgesZ) {
+          for (const m of myEdgesZ) {
+            if (Math.abs(m - e) < threshold) { sz += e - m; gz.push(e); }
+          }
+        }
+
+        const totalH = building.floors.reduce((s, f) => s + f.ceilingHeight, 0);
+        setSnapGuides({ x: gx, z: gz, floorY: totalH, height: 1 });
 
         onChange({
           ...building,
           roofSegments: building.roofSegments.map((s) =>
-            s.id === roofId ? { ...s, x: snapValue(snapped.x), z: snapValue(snapped.z) } : s
+            s.id === roofId ? { ...s, x: sx, z: sz } : s
           ),
         });
         return;
@@ -1290,6 +1430,14 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
             onRoomMoveTo={handleRoomMoveTo}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onRoofUpdate={(roofId, updates) => {
+              onChange({
+                ...building,
+                roofSegments: building.roofSegments.map((s) =>
+                  s.id === roofId ? { ...s, ...updates } : s
+                ),
+              });
+            }}
           />
         </Canvas>
 
