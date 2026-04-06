@@ -10,6 +10,8 @@ export function calculateRoomLivingArea(room: Room): number {
       return room.area * 0.25;
     case "loggia":
       return room.area * 0.5;
+    case "wintergarten":
+      return room.area * 0.5;
     case "keller":
     case "garage":
       return 0;
@@ -45,6 +47,7 @@ export function getFactorLabel(room: Room): string {
     case "terrasse":
       return "25%";
     case "loggia":
+    case "wintergarten":
       return "50%";
     case "keller":
     case "garage":

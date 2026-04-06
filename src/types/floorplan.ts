@@ -4,6 +4,7 @@ export type RoomCategory =
   | "balkon"
   | "terrasse"
   | "loggia"
+  | "wintergarten"
   | "keller"
   | "garage";
 

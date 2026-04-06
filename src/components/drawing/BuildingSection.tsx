@@ -13,6 +13,7 @@ const CATEGORY_FILLS: Record<string, string> = {
   balkon: "#f0fdf4",
   terrasse: "#f0fdf4",
   loggia: "#eef2ff",
+  wintergarten: "#ecfeff",
   keller: "#faf5f0",
   garage: "#f9fafb",
 };

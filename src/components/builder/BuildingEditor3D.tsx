@@ -30,6 +30,7 @@ const CATEGORY_COLORS: Record<RoomCategory, string> = {
   balkon: "#86efac",
   terrasse: "#86efac",
   loggia: "#a5b4fc",
+  wintergarten: "#67e8f9",
   keller: "#d4b896",
   garage: "#e5e7eb",
 };
@@ -40,6 +41,7 @@ const CATEGORY_LABELS: Record<RoomCategory, string> = {
   balkon: "Balkon",
   terrasse: "Terrasse",
   loggia: "Loggia",
+  wintergarten: "Wintergarten",
   keller: "Keller",
   garage: "Garage",
 };
