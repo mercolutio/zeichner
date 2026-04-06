@@ -17,8 +17,25 @@ const CATEGORY_FILLS: Record<string, string> = {
 };
 
 function FloorPlan({ floor }: { floor: FloorData }) {
-  const rooms = floor.rooms.filter((r) => !r.isVoid);
-  if (rooms.length === 0) return null;
+  const explicitRooms = floor.rooms.filter((r) => !r.isVoid);
+  const voidRooms = floor.rooms.filter((r) => r.isVoid);
+
+  // If no explicit rooms: the entire floor minus voids is one room
+  const rooms: RoomData[] = explicitRooms.length > 0
+    ? explicitRooms
+    : [{
+        id: "__floor__",
+        name: floor.name,
+        width: floor.width,
+        depth: floor.depth,
+        x: 0,
+        z: 0,
+        category: "wohnraum" as const,
+        isVoid: false,
+        hasSlope: false,
+      }];
+
+  const hasImplicitRoom = explicitRooms.length === 0;
 
   // Compute bounding box from rooms
   const minX = Math.min(...rooms.map((r) => r.x));
@@ -61,7 +78,8 @@ function FloorPlan({ floor }: { floor: FloorData }) {
     return true;
   }
 
-  const totalArea = rooms.reduce((s, r) => s + roomArea(r), 0);
+  const voidArea = voidRooms.reduce((s, r) => s + roomArea(r), 0);
+  const totalArea = rooms.reduce((s, r) => s + roomArea(r), 0) - (hasImplicitRoom ? voidArea : 0);
 
   // Dimension lines along the top
   const sortedByX = [...rooms].sort((a, b) => a.x - b.x);
@@ -97,6 +115,15 @@ function FloorPlan({ floor }: { floor: FloorData }) {
           />
         ))}
 
+        {/* Void cutouts — white rects that erase the fill */}
+        {hasImplicitRoom && voidRooms.map((v) => (
+          <rect key={`void-${v.id}`}
+            x={toX(v.x)} y={toY(v.z)}
+            width={v.width * scale} height={v.depth * scale}
+            fill="white" stroke="none"
+          />
+        ))}
+
         {/* Room walls */}
         {rooms.map((room) => {
           const rx = toX(room.x);
@@ -123,6 +150,28 @@ function FloorPlan({ floor }: { floor: FloorData }) {
               {/* Right wall */}
               <line x1={rx + rw} y1={ry} x2={rx + rw} y2={ry + rh}
                 stroke="#1e293b" strokeWidth={rightOuter ? WALL_OUTER : WALL_INNER} />
+            </g>
+          );
+        })}
+
+        {/* Void edges — drawn as outer walls where they cut into the floor */}
+        {hasImplicitRoom && voidRooms.map((v) => {
+          const vx = toX(v.x);
+          const vy = toY(v.z);
+          const vw = v.width * scale;
+          const vh = v.depth * scale;
+          // Only draw edges that are inside the floor (not at the boundary)
+          const EPS = 0.05;
+          const drawTop = v.z > minZ + EPS;
+          const drawBottom = v.z + v.depth < maxZ - EPS;
+          const drawLeft = v.x > minX + EPS;
+          const drawRight = v.x + v.width < maxX - EPS;
+          return (
+            <g key={`void-walls-${v.id}`}>
+              {drawTop && <line x1={vx} y1={vy} x2={vx + vw} y2={vy} stroke="#1e293b" strokeWidth={WALL_OUTER} />}
+              {drawBottom && <line x1={vx} y1={vy + vh} x2={vx + vw} y2={vy + vh} stroke="#1e293b" strokeWidth={WALL_OUTER} />}
+              {drawLeft && <line x1={vx} y1={vy} x2={vx} y2={vy + vh} stroke="#1e293b" strokeWidth={WALL_OUTER} />}
+              {drawRight && <line x1={vx + vw} y1={vy} x2={vx + vw} y2={vy + vh} stroke="#1e293b" strokeWidth={WALL_OUTER} />}
             </g>
           );
         })}
