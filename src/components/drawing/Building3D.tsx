@@ -1,10 +1,29 @@
 "use client";
 
-import { useRef, useState, useMemo } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, Text, Line, Html } from "@react-three/drei";
+import React, { useRef, useState, useMemo, Component, type ReactNode } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls, Text, Html } from "@react-three/drei";
 import * as THREE from "three";
 import { FloorplanAnalysis, Floor, Room } from "@/types/floorplan";
+import IsometricView from "./IsometricView";
+
+// Error boundary to catch WebGL / Three.js errors
+class ThreeErrorBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) return this.props.fallback;
+    return this.props.children;
+  }
+}
 
 interface Building3DProps {
   analysis: FloorplanAnalysis;
@@ -370,59 +389,63 @@ export default function Building3D({ analysis }: Building3DProps) {
     return { ...analysis, floors: newFloors };
   }, [analysis, exploded]);
 
+  const fallback = <IsometricView analysis={analysis} />;
+
   return (
-    <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-      <div className="px-5 py-3 border-b flex items-center justify-between">
-        <div>
-          <h3 className="font-semibold text-gray-800">3D-Ansicht</h3>
-          <p className="text-xs text-gray-500">
-            Ziehen zum Drehen · Scrollen zum Zoomen · Shift+Ziehen zum Verschieben
-          </p>
+    <ThreeErrorBoundary fallback={fallback}>
+      <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+        <div className="px-5 py-3 border-b flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-gray-800">3D-Ansicht</h3>
+            <p className="text-xs text-gray-500">
+              Ziehen zum Drehen · Scrollen zum Zoomen · Shift+Ziehen zum Verschieben
+            </p>
+          </div>
+          <button
+            onClick={() => setExploded(!exploded)}
+            className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
+              exploded
+                ? "bg-blue-50 border-blue-200 text-blue-700"
+                : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            {exploded ? "Zusammenklappen" : "Explodierte Ansicht"}
+          </button>
         </div>
-        <button
-          onClick={() => setExploded(!exploded)}
-          className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${
-            exploded
-              ? "bg-blue-50 border-blue-200 text-blue-700"
-              : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
-          }`}
-        >
-          {exploded ? "Zusammenklappen" : "Explodierte Ansicht"}
-        </button>
+        <div style={{ height: "500px" }}>
+          <Canvas
+            camera={{
+              position: [
+                analysis.buildingWidth * 1.5,
+                analysis.floors.reduce((s, f) => s + f.ceilingHeight, 0) * 1.2,
+                analysis.buildingDepth * 1.5,
+              ],
+              fov: 50,
+              near: 0.1,
+              far: 200,
+            }}
+            shadows
+          >
+            <Scene analysis={explodedAnalysis} />
+          </Canvas>
+        </div>
+        {/* Legend */}
+        <div className="px-5 py-3 border-t flex flex-wrap gap-3 text-xs">
+          {analysis.floors
+            .sort((a, b) => a.level - b.level)
+            .map((floor, i) => (
+              <div key={i} className="flex items-center gap-1.5">
+                <div
+                  className="w-3 h-3 rounded-sm"
+                  style={{
+                    backgroundColor: FLOOR_COLORS[i % FLOOR_COLORS.length],
+                  }}
+                />
+                <span className="text-gray-600">{floor.name}</span>
+              </div>
+            ))}
+        </div>
       </div>
-      <div style={{ height: "500px" }}>
-        <Canvas
-          camera={{
-            position: [
-              analysis.buildingWidth * 1.5,
-              analysis.floors.reduce((s, f) => s + f.ceilingHeight, 0) * 1.2,
-              analysis.buildingDepth * 1.5,
-            ],
-            fov: 50,
-            near: 0.1,
-            far: 200,
-          }}
-          shadows
-        >
-          <Scene analysis={explodedAnalysis} />
-        </Canvas>
-      </div>
-      {/* Legend */}
-      <div className="px-5 py-3 border-t flex flex-wrap gap-3 text-xs">
-        {analysis.floors
-          .sort((a, b) => a.level - b.level)
-          .map((floor, i) => (
-            <div key={i} className="flex items-center gap-1.5">
-              <div
-                className="w-3 h-3 rounded-sm"
-                style={{
-                  backgroundColor: FLOOR_COLORS[i % FLOOR_COLORS.length],
-                }}
-              />
-              <span className="text-gray-600">{floor.name}</span>
-            </div>
-          ))}
-      </div>
-    </div>
+    </ThreeErrorBoundary>
   );
 }
