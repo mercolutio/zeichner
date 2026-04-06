@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { BuildingData, FloorData, RoomData, RoofSegment, roomArea, buildingWidth, buildingDepth } from "@/types/building";
+import { BuildingData, FloorData, RoomData, RoofSegment, roomArea, buildingWidth, buildingDepth, roofHeight as calcRoofHeight } from "@/types/building";
 
 const WALL_T = 4;
 const SLAB_T = 3;
@@ -59,11 +59,7 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
 
   // Find max roof height
   const maxRoofH = building.roofSegments.length > 0
-    ? Math.max(...building.roofSegments.map((seg) => {
-        if (seg.type === "Flachdach") return 0.3;
-        const profileW = seg.width;
-        return (profileW / 2) * Math.tan((seg.pitchDegrees * Math.PI) / 180);
-      }))
+    ? Math.max(...building.roofSegments.map((seg) => calcRoofHeight(seg)))
     : 0;
 
   const foundH = 0.3;
@@ -216,7 +212,7 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
       {/* Roof segments */}
       {building.roofSegments.map((seg, i) => {
         const profileW = seg.width;
-        const roofH = seg.type === "Flachdach" ? 0.3 : (profileW / 2) * Math.tan((seg.pitchDegrees * Math.PI) / 180);
+        const roofH = calcRoofHeight(seg);
         const segX = direction === "width" ? seg.x : seg.z;
         const segW = direction === "width" ? seg.width : seg.depth;
 

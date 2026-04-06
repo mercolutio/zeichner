@@ -46,11 +46,19 @@ export interface RoofSegment {
   name: string;
   type: RoofType;
   pitchDegrees: number;
+  height?: number;    // Dachhöhe in Metern (optional — überschreibt pitchDegrees-Berechnung)
   rotation: number;   // Grad — Firstrichtung (0 = O-W, 90 = N-S, frei drehbar)
   x: number;
   z: number;
   width: number;
   depth: number;
+}
+
+/** Dachhöhe berechnen — entweder explizit oder aus Neigungswinkel */
+export function roofHeight(seg: RoofSegment): number {
+  if (seg.type === "Flachdach") return 0.2;
+  if (seg.height != null && seg.height > 0) return seg.height;
+  return (seg.width / 2) * Math.tan((seg.pitchDegrees * Math.PI) / 180);
 }
 
 export interface BuildingData {

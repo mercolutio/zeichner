@@ -15,6 +15,7 @@ import {
   createFloor,
   createRoofSegment,
   roomArea,
+  roofHeight as calcRoofHeight,
   buildingWidth,
   buildingDepth,
 } from "@/types/building";
@@ -317,7 +318,7 @@ function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown, on
   const { type, pitchDegrees, rotation: rotDeg, x, z, width, depth } = segment;
 
   // Profile is always along width, extruded along depth, then rotated
-  const roofHeight = type === "Flachdach" ? 0.2 : (width / 2) * Math.tan((pitchDegrees * Math.PI) / 180);
+  const roofHeight = calcRoofHeight(segment);
   const rotRad = (rotDeg * Math.PI) / 180;
 
   const cx = x + width / 2;
@@ -853,10 +854,22 @@ function SidePanel({
                 </select>
                 {seg.type !== "Flachdach" && (
                   <>
-                    <input type="number" step="1" min="10" max="60" value={seg.pitchDegrees} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, pitchDegrees: +e.target.value || 35 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Neigung °" />
+                    <input type="number" step="1" min="5" max="80" value={seg.pitchDegrees} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, pitchDegrees: +e.target.value || 35, height: undefined } : s) })} className="border rounded px-1 py-0.5 text-right" title="Neigung °" />
                     <input type="number" step="5" min="0" max="360" value={seg.rotation} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, rotation: +e.target.value || 0 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Rotation °" />
                   </>
                 )}
+              </div>
+              {seg.type !== "Flachdach" && (
+              <div className="grid grid-cols-2 gap-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-400">H:</span>
+                  <input type="number" step="0.1" min="0.5" value={+(calcRoofHeight(seg).toFixed(2))}
+                    onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, height: +e.target.value || 1 } : s) })}
+                    className="flex-1 border rounded px-1 py-0.5 text-right" title="Dachhöhe (m)" />
+                </div>
+                <span className="text-[10px] text-gray-400 self-center">= {calcRoofHeight(seg).toFixed(2)} m</span>
+              </div>
+              )}
               </div>
               <div className="grid grid-cols-4 gap-1">
                 <input type="number" step="0.1" value={seg.x} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, x: +e.target.value } : s) })} className="border rounded px-1 py-0.5 text-right" title="X" />
