@@ -38,14 +38,12 @@ function buildContentBlock(file: FileInput) {
 
 /** Extract JSON from Claude's response, handling markdown fences and extra text */
 function extractJSON(text: string): unknown {
-  // 1. Try direct parse
   try {
     return JSON.parse(text);
   } catch {
     // continue
   }
 
-  // 2. Strip markdown code fences
   const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
   if (fenceMatch) {
     try {
@@ -55,7 +53,6 @@ function extractJSON(text: string): unknown {
     }
   }
 
-  // 3. Find first { and last }
   const firstBrace = text.indexOf("{");
   const lastBrace = text.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -71,7 +68,6 @@ function extractJSON(text: string): unknown {
   );
 }
 
-/** Extract text from a Claude response, skipping thinking blocks */
 function getResponseText(
   content: Anthropic.Messages.ContentBlock[]
 ): string {
@@ -82,6 +78,21 @@ function getResponseText(
     throw new Error("Keine Textantwort von Claude erhalten");
   }
   return textBlock.text;
+}
+
+async function callClaude(
+  system: string,
+  messages: Anthropic.Messages.MessageParam[]
+): Promise<string> {
+  const stream = await client.messages.stream({
+    model: "claude-opus-4-20250514",
+    max_tokens: 16384,
+    temperature: 0.2,
+    system,
+    messages,
+  });
+  const response = await stream.finalMessage();
+  return getResponseText(response.content);
 }
 
 export async function analyzeFloorplan(
@@ -125,42 +136,25 @@ WICHTIG:
       let responseText: string;
 
       if (attempt === 0) {
-        // First attempt: low temperature for consistency
-        const stream = await client.messages.stream({
-          model: "claude-opus-4-20250514",
-          max_tokens: 16384,
-          temperature: 0.2,
-          system: ANALYSIS_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: baseContent }],
-        });
-        const response = await stream.finalMessage();
-        responseText = getResponseText(response.content);
+        responseText = await callClaude(ANALYSIS_SYSTEM_PROMPT, [
+          { role: "user", content: baseContent },
+        ]);
       } else {
-        // Retry with error feedback
         const retryMessage =
           `Dein vorheriger Versuch hatte einen Fehler: ${lastError?.message}\n\n` +
           `Bitte korrigiere das und antworte NUR mit validem JSON. Kein Markdown, keine Erklärungen.`;
 
-        const stream = await client.messages.stream({
-          model: "claude-opus-4-20250514",
-          max_tokens: 16384,
-          temperature: 0.2,
-          system: ANALYSIS_SYSTEM_PROMPT,
-          messages: [
-            { role: "user", content: baseContent },
-            {
-              role: "user",
-              content: [{ type: "text", text: retryMessage }],
-            },
-          ],
-        });
-        const response = await stream.finalMessage();
-        responseText = getResponseText(response.content);
+        responseText = await callClaude(ANALYSIS_SYSTEM_PROMPT, [
+          { role: "user", content: baseContent },
+          {
+            role: "user",
+            content: [{ type: "text", text: retryMessage }],
+          },
+        ]);
       }
 
       const parsed = extractJSON(responseText);
 
-      // Validate with Zod if schema provided
       if (zodSchema) {
         zodSchema.parse(parsed);
       }
@@ -172,14 +166,11 @@ WICHTIG:
 
       if (error instanceof z.ZodError) {
         const issues = error.issues
-          .map(
-            (i) => `${i.path.join(".")}: ${i.message}`
-          )
+          .map((i) => `${i.path.join(".")}: ${i.message}`)
           .join("; ");
         lastError = new Error(`Validierungsfehler: ${issues}`);
       }
 
-      // Don't retry on non-recoverable errors (auth, rate limit, etc.)
       if (
         error instanceof Anthropic.APIError &&
         (error.status === 401 || error.status === 403)
