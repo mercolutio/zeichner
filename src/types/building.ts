@@ -17,6 +17,7 @@ export interface RoomData {
   x: number;       // Position vom linken Gebäuderand
   z: number;       // Position vom vorderen Gebäuderand
   category: RoomCategory;
+  isVoid: boolean; // Negativraum — wird von der Fläche abgezogen
   hasSlope: boolean;
   slopeDetails?: {
     minHeight: number;
@@ -32,6 +33,8 @@ export interface FloorData {
   name: string;
   level: number;         // -1 = KG, 0 = EG, 1 = OG, ...
   ceilingHeight: number; // Meter
+  width: number;         // Stockwerk-Breite (X)
+  depth: number;         // Stockwerk-Tiefe (Z)
   rooms: RoomData[];
 }
 
@@ -42,23 +45,31 @@ export interface RoofSegment {
   name: string;
   type: RoofType;
   pitchDegrees: number;
-  ridgeDirection: RidgeDirection; // Firstrichtung
-  x: number;        // Position vom linken Gebäuderand
-  z: number;        // Position vom vorderen Gebäuderand
-  width: number;    // Breite (X)
-  depth: number;    // Tiefe (Z)
+  ridgeDirection: RidgeDirection;
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
 }
 
 export interface BuildingData {
   buildingType: string;
-  width: number;       // Gebäudebreite (X)
-  depth: number;       // Gebäudetiefe (Z)
   floors: FloorData[];
   roofSegments: RoofSegment[];
   address?: string;
-  // Legacy — wird ignoriert wenn roofSegments.length > 0
+  // Legacy compat
   roofType: RoofType;
   roofPitchDegrees: number;
+}
+
+/** Max width across all floors */
+export function buildingWidth(b: BuildingData): number {
+  return Math.max(1, ...b.floors.map((f) => f.width));
+}
+
+/** Max depth across all floors */
+export function buildingDepth(b: BuildingData): number {
+  return Math.max(1, ...b.floors.map((f) => f.depth));
 }
 
 export function createRoom(partial?: Partial<RoomData>): RoomData {
@@ -70,6 +81,7 @@ export function createRoom(partial?: Partial<RoomData>): RoomData {
     x: 0,
     z: 0,
     category: "wohnraum",
+    isVoid: false,
     hasSlope: false,
     ...partial,
   };
@@ -81,6 +93,8 @@ export function createFloor(partial?: Partial<FloorData>): FloorData {
     name: "Erdgeschoss",
     level: 0,
     ceilingHeight: 2.5,
+    width: 10,
+    depth: 8,
     rooms: [],
     ...partial,
   };
@@ -104,12 +118,12 @@ export function createRoofSegment(partial?: Partial<RoofSegment>): RoofSegment {
 export function createBuilding(): BuildingData {
   return {
     buildingType: "Einfamilienhaus",
-    width: 10,
-    depth: 8,
     floors: [
       createFloor({
         name: "Erdgeschoss",
         level: 0,
+        width: 10,
+        depth: 8,
         rooms: [
           createRoom({ name: "Wohnzimmer", width: 5, depth: 4, x: 0, z: 0 }),
           createRoom({ name: "Küche", width: 3.5, depth: 4, x: 5, z: 0, category: "nutzraum" }),
@@ -124,8 +138,12 @@ export function createBuilding(): BuildingData {
   };
 }
 
+/** Netto-Fläche: Räume minus Voids */
 export function floorArea(floor: FloorData): number {
-  return floor.rooms.reduce((sum, r) => sum + r.width * r.depth, 0);
+  return floor.rooms.reduce((sum, r) => {
+    const area = r.width * r.depth;
+    return sum + (r.isVoid ? -area : area);
+  }, 0);
 }
 
 export function roomArea(room: RoomData): number {

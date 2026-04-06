@@ -16,6 +16,8 @@ import {
   createFloor,
   createRoofSegment,
   roomArea,
+  buildingWidth,
+  buildingDepth,
 } from "@/types/building";
 
 interface BuildingEditor3DProps {
@@ -146,6 +148,7 @@ function Room3D({
   ceilingHeight,
   selected,
   isDragging,
+  isVoid,
   onPointerDown,
 }: {
   room: RoomData;
@@ -153,10 +156,11 @@ function Room3D({
   ceilingHeight: number;
   selected: boolean;
   isDragging: boolean;
+  isVoid: boolean;
   onPointerDown: (e: ThreeEvent<PointerEvent>) => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const color = CATEGORY_COLORS[room.category];
+  const color = isVoid ? "#ef4444" : CATEGORY_COLORS[room.category];
   const wallH = ceilingHeight * 0.95;
   const cx = room.x + room.width / 2;
   const cz = room.z + room.depth / 2;
@@ -172,17 +176,28 @@ function Room3D({
         <boxGeometry args={[room.width, wallH, room.depth]} />
         <meshStandardMaterial
           color={isDragging ? "#2563eb" : selected ? "#3b82f6" : hovered ? "#60a5fa" : color}
-          opacity={isDragging ? 0.5 : selected ? 0.75 : 0.65}
+          opacity={isVoid ? 0.25 : isDragging ? 0.5 : selected ? 0.75 : 0.65}
           transparent
           side={THREE.DoubleSide}
         />
       </mesh>
 
       {/* Edges */}
-      <lineSegments>
-        <edgesGeometry args={[new THREE.BoxGeometry(room.width, wallH, room.depth)]} />
-        <lineBasicMaterial color={selected || isDragging ? "#1d4ed8" : hovered ? "#3b82f6" : "#64748b"} />
-      </lineSegments>
+      {isVoid ? (
+        <Line
+          points={[
+            [-room.width/2, -wallH/2, -room.depth/2], [room.width/2, -wallH/2, -room.depth/2],
+            [room.width/2, -wallH/2, room.depth/2], [-room.width/2, -wallH/2, room.depth/2],
+            [-room.width/2, -wallH/2, -room.depth/2],
+          ]}
+          color="#dc2626" lineWidth={2} dashed dashSize={0.15} gapSize={0.1}
+        />
+      ) : (
+        <lineSegments>
+          <edgesGeometry args={[new THREE.BoxGeometry(room.width, wallH, room.depth)]} />
+          <lineBasicMaterial color={selected || isDragging ? "#1d4ed8" : hovered ? "#3b82f6" : "#64748b"} />
+        </lineSegments>
+      )}
 
       {/* Room name on floor */}
       <Text position={[0, -wallH / 2 + 0.05, -room.depth * 0.1]} rotation={[-Math.PI / 2, 0, 0]}
@@ -421,6 +436,8 @@ function Scene({
 }) {
   const controlsRef = useRef<any>(null);
   const EXPLODE_GAP = 1.5;
+  const bWidth = buildingWidth(building);
+  const bDepth = buildingDepth(building);
 
   const sortedFloors = useMemo(
     () => [...building.floors].sort((a, b) => a.level - b.level),
@@ -435,9 +452,9 @@ function Scene({
   });
 
   const totalHeight = currentY;
-  const centerX = building.width / 2;
+  const centerX = bWidth / 2;
   const centerY = totalHeight / 2;
-  const centerZ = building.depth / 2;
+  const centerZ = bDepth / 2;
 
   // Disable orbit while dragging
   useEffect(() => {
@@ -466,7 +483,7 @@ function Scene({
       {/* Ground — click to deselect */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.01, centerZ]} receiveShadow
         onPointerDown={() => { if (!dragRoomId) onSelectRoom(null); }}>
-        <planeGeometry args={[building.width + 12, building.depth + 12]} />
+        <planeGeometry args={[bWidth + 12, bDepth + 12]} />
         <meshStandardMaterial color="#f1f5f9" opacity={0.5} transparent />
       </mesh>
 
@@ -483,10 +500,10 @@ function Scene({
         sectionSize={5} sectionThickness={1} sectionColor="#cbd5e1"
         fadeDistance={40} infiniteGrid={false} />
 
-      <BuildingOutline width={building.width} depth={building.depth} />
+      <BuildingOutline width={bWidth} depth={bDepth} />
 
-      <DimensionLine start={[0, 0, building.depth + 0.5]} end={[building.width, 0, building.depth + 0.5]} offset={[0, 0, 0]} label={`${building.width.toFixed(2)} m`} />
-      <DimensionLine start={[building.width + 0.5, 0, 0]} end={[building.width + 0.5, 0, building.depth]} offset={[0, 0, 0]} label={`${building.depth.toFixed(2)} m`} />
+      <DimensionLine start={[0, 0, bDepth + 0.5]} end={[bWidth, 0, bDepth + 0.5]} offset={[0, 0, 0]} label={`${bWidth.toFixed(2)} m`} />
+      <DimensionLine start={[bWidth + 0.5, 0, 0]} end={[bWidth + 0.5, 0, bDepth]} offset={[0, 0, 0]} label={`${bDepth.toFixed(2)} m`} />
 
       {floorPositions.map(({ floor, y, index }) => {
         const isActive = !activeFloorId || activeFloorId === floor.id;
@@ -494,7 +511,7 @@ function Scene({
 
         return (
           <group key={floor.id}>
-            <FloorSlab width={building.width} depth={building.depth} y={y} floorIndex={index} />
+            <FloorSlab width={floor.width} depth={floor.depth} y={y} floorIndex={index} />
 
             {isActive && floor.rooms.map((room) => (
               <Room3D
@@ -504,6 +521,7 @@ function Scene({
                 ceilingHeight={floor.ceilingHeight}
                 selected={selectedRoom === room.id}
                 isDragging={dragRoomId === room.id}
+                isVoid={room.isVoid}
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   onSelectRoom(room.id);
@@ -516,8 +534,8 @@ function Scene({
             ))}
 
             {isGhost && (
-              <mesh position={[building.width / 2, y + floor.ceilingHeight / 2, building.depth / 2]}>
-                <boxGeometry args={[building.width, floor.ceilingHeight * 0.9, building.depth]} />
+              <mesh position={[floor.width / 2, y + floor.ceilingHeight / 2, floor.depth / 2]}>
+                <boxGeometry args={[floor.width, floor.ceilingHeight * 0.9, floor.depth]} />
                 <meshStandardMaterial color="#94a3b8" opacity={0.08} transparent side={THREE.DoubleSide} />
               </mesh>
             )}
@@ -526,7 +544,7 @@ function Scene({
               {floor.name}
             </Text>
             {isActive && (
-              <Text position={[building.width + 1.2, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.2} color="#dc2626" anchorX="left" anchorY="middle">
+              <Text position={[bWidth + 1.2, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.2} color="#dc2626" anchorX="left" anchorY="middle">
                 {floor.ceilingHeight.toFixed(2)} m
               </Text>
             )}
@@ -536,7 +554,7 @@ function Scene({
 
       {snapGuides && (
         <SnapGuides guidesX={snapGuides.x} guidesZ={snapGuides.z}
-          buildingWidth={building.width} buildingDepth={building.depth}
+          buildingWidth={bWidth} buildingDepth={bDepth}
           floorY={snapGuides.floorY} height={snapGuides.height} />
       )}
 
@@ -556,7 +574,7 @@ function Scene({
       ))}
 
       <CameraController topView={topView} centerX={centerX} centerZ={centerZ}
-        viewHeight={Math.max(building.width, building.depth) * 1.2 + totalHeight} />
+        viewHeight={Math.max(bWidth, bDepth) * 1.2 + totalHeight} />
 
       <OrbitControls ref={controlsRef}
         target={[centerX, topView ? 0 : centerY, centerZ]}
@@ -622,7 +640,7 @@ function SidePanel({
     let newX = 0;
     if (floor) {
       const maxRight = Math.max(0, ...floor.rooms.map((r) => r.x + r.width));
-      newX = maxRight < building.width - 2 ? maxRight : 0;
+      newX = maxRight < floor.width - 2 ? maxRight : 0;
     }
     const newRoom = createRoom({ name: "Neuer Raum", x: newX });
     onSelectRoom(newRoom.id);
@@ -661,19 +679,16 @@ function SidePanel({
     });
   };
 
+  const bWidth = buildingWidth(building);
+  const bDepth = buildingDepth(building);
   const sortedFloors = [...building.floors].sort((a, b) => b.level - a.level);
 
   return (
     <div className="w-80 bg-white border-l overflow-y-auto flex flex-col">
-      {/* Building settings */}
+      {/* Building summary */}
       <div className="p-4 border-b">
-        <h3 className="font-semibold text-sm text-gray-800 mb-3">Gebäude</h3>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <label className="text-gray-600 self-center">Breite (m)</label>
-          <input type="number" step="0.1" value={building.width} onChange={(e) => onChange({ ...building, width: +e.target.value || 1 })} className="border rounded px-2 py-1 text-right" />
-          <label className="text-gray-600 self-center">Tiefe (m)</label>
-          <input type="number" step="0.1" value={building.depth} onChange={(e) => onChange({ ...building, depth: +e.target.value || 1 })} className="border rounded px-2 py-1 text-right" />
-        </div>
+        <h3 className="font-semibold text-sm text-gray-800 mb-1">Gebäude</h3>
+        <div className="text-xs text-gray-500">Max: {bWidth.toFixed(1)} × {bDepth.toFixed(1)} m</div>
       </div>
 
       {/* Roof segments */}
@@ -778,12 +793,20 @@ function SidePanel({
                   onChange={(e) => updateFloor(floor.id, { name: e.target.value })}
                   className="font-medium text-sm bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none w-full"
                 />
-                <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5">
+                <div className="flex items-center gap-2 text-xs text-gray-500 mt-0.5 flex-wrap">
                   <span>H:</span>
                   <input type="number" step="0.1" min="2" max="5" value={floor.ceilingHeight}
                     onChange={(e) => updateFloor(floor.id, { ceilingHeight: +e.target.value || 2.5 })}
                     className="w-12 border rounded px-1 py-0.5 text-right bg-white" />
-                  <span>m · {floor.rooms.length} Räume · {floor.rooms.reduce((s, r) => s + roomArea(r), 0).toFixed(1)} m²</span>
+                  <span>B:</span>
+                  <input type="number" step="0.1" min="1" value={floor.width}
+                    onChange={(e) => updateFloor(floor.id, { width: +e.target.value || 1 })}
+                    className="w-12 border rounded px-1 py-0.5 text-right bg-white" />
+                  <span>T:</span>
+                  <input type="number" step="0.1" min="1" value={floor.depth}
+                    onChange={(e) => updateFloor(floor.id, { depth: +e.target.value || 1 })}
+                    className="w-12 border rounded px-1 py-0.5 text-right bg-white" />
+                  <span>{floor.rooms.length} Räume · {floor.rooms.reduce((s, r) => s + roomArea(r), 0).toFixed(1)} m²</span>
                 </div>
               </div>
               <div className="flex gap-1 ml-2 shrink-0">
@@ -806,8 +829,11 @@ function SidePanel({
                   className={`w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition-colors ${selectedRoom === room.id ? "bg-blue-50 border-l-2 border-blue-500" : ""}`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-gray-800">{room.name}</span>
-                    <span className="text-xs text-gray-500">{roomArea(room).toFixed(1)} m²</span>
+                    <span className={`font-medium ${room.isVoid ? "text-red-500 line-through" : "text-gray-800"}`}>{room.name}</span>
+                    <span className="flex items-center gap-1">
+                      {room.isVoid && <span className="text-[10px] bg-red-100 text-red-600 px-1 rounded">Void</span>}
+                      <span className="text-xs text-gray-500">{roomArea(room).toFixed(1)} m²</span>
+                    </span>
                   </div>
                   <div className="text-xs text-gray-500">
                     {room.width.toFixed(2)} × {room.depth.toFixed(2)} m · {CATEGORY_LABELS[room.category]}
@@ -857,6 +883,15 @@ function SidePanel({
                 {Object.entries(CATEGORY_LABELS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
               </select>
             </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedRoomData.isVoid}
+                onChange={(e) => updateRoom(selectedRoomData!.id, selectedFloor!.id, { isVoid: e.target.checked })}
+                className="rounded border-gray-300 text-red-500 focus:ring-red-500"
+              />
+              <span className="text-xs text-gray-600">Negativraum (Void)</span>
+            </label>
             <div className="flex gap-2 pt-1">
               <button
                 onClick={() => onDuplicateRoom(selectedRoomData!.id, selectedFloor!.id)}
@@ -912,6 +947,8 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
   const [activeFloorId, setActiveFloorId] = useState<string | null>(null);
   const [snapGuides, setSnapGuides] = useState<{ x: number[]; z: number[]; floorY: number; height: number } | null>(null);
   const { current: historyBuilding, push: pushHistory, undo, redo, canUndo, canRedo } = useHistory(building);
+  const bWidth = buildingWidth(building);
+  const bDepth = buildingDepth(building);
 
   // Drag state: track which room is being dragged, offset from click to room origin
   const [dragRoomId, setDragRoomId] = useState<string | null>(null);
@@ -953,7 +990,7 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
         const seg = building.roofSegments.find((s) => s.id === roofId);
         if (!seg) return;
 
-        const snapped = snapWithGuides(rawX, rawZ, seg.width, seg.depth, building.width, building.depth, []);
+        const snapped = snapWithGuides(rawX, rawZ, seg.width, seg.depth, bWidth, bDepth, []);
         setSnapGuides({ x: snapped.guidesX, z: snapped.guidesZ, floorY: building.floors.reduce((s, f) => s + f.ceilingHeight, 0), height: 1 });
 
         onChange({
@@ -971,7 +1008,7 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
       if (!room || !floor) return;
 
       const otherRooms = floor.rooms.filter((r) => r.id !== dragRoomId);
-      const snapped = snapWithGuides(rawX, rawZ, room.width, room.depth, building.width, building.depth, otherRooms);
+      const snapped = snapWithGuides(rawX, rawZ, room.width, room.depth, floor.width, floor.depth, otherRooms);
 
       setSnapGuides({
         x: snapped.guidesX,
@@ -980,8 +1017,8 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
         height: floor.ceilingHeight,
       });
 
-      const clampedX = Math.max(0, Math.min(snapped.x, building.width - room.width));
-      const clampedZ = Math.max(0, Math.min(snapped.z, building.depth - room.depth));
+      const clampedX = Math.max(0, Math.min(snapped.x, floor.width - room.width));
+      const clampedZ = Math.max(0, Math.min(snapped.z, floor.depth - room.depth));
 
       onChange({
         ...building,
@@ -1007,12 +1044,14 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
       const floor = building.floors.find((f) => f.id === floorId);
       const room = floor?.rooms.find((r) => r.id === roomId);
       if (!room) return;
+      const floorW = floor?.width ?? bWidth;
+      const floorD = floor?.depth ?? bDepth;
       const newRoom = createRoom({
         ...room,
         id: undefined as unknown as string,
         name: room.name + " (Kopie)",
-        x: Math.min(room.x + 0.5, building.width - room.width),
-        z: Math.min(room.z + 0.5, building.depth - room.depth),
+        x: Math.min(room.x + 0.5, floorW - room.width),
+        z: Math.min(room.z + 0.5, floorD - room.depth),
       });
       setSelectedRoom(newRoom.id);
       updateBuilding({
@@ -1099,9 +1138,9 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
             if (room) {
               let { x, z } = room;
               if (e.key === "ArrowLeft") x = Math.max(0, x - step);
-              if (e.key === "ArrowRight") x = Math.min(building.width - room.width, x + step);
+              if (e.key === "ArrowRight") x = Math.min(floor.width - room.width, x + step);
               if (e.key === "ArrowUp") z = Math.max(0, z - step);
-              if (e.key === "ArrowDown") z = Math.min(building.depth - room.depth, z + step);
+              if (e.key === "ArrowDown") z = Math.min(floor.depth - room.depth, z + step);
               updateBuilding({
                 ...building,
                 floors: building.floors.map((f) =>
@@ -1126,7 +1165,7 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
       <div className="flex-1 relative">
         <Canvas
           camera={{
-            position: [building.width * 1.8, totalHeight * 1.5, building.depth * 1.8],
+            position: [bWidth * 1.8, totalHeight * 1.5, bDepth * 1.8],
             fov: 50,
             near: 0.1,
             far: 200,

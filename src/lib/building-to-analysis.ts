@@ -1,26 +1,31 @@
-import { BuildingData, FloorData, RoomData, roomArea, floorArea } from "@/types/building";
-import { FloorplanAnalysis, Floor, Room } from "@/types/floorplan";
+import { BuildingData, roomArea, floorArea, buildingWidth, buildingDepth } from "@/types/building";
+import { FloorplanAnalysis, Floor } from "@/types/floorplan";
 import { calculateRoomLivingArea } from "./area-calculation";
 
 /** Convert the 3D building model to the FloorplanAnalysis format used by cross-sections, PDF export etc. */
 export function buildingToAnalysis(building: BuildingData): FloorplanAnalysis {
+  const bWidth = buildingWidth(building);
+  const bDepth = buildingDepth(building);
+
   const floors: Floor[] = building.floors
     .sort((a, b) => a.level - b.level)
     .map((f) => ({
       name: f.name,
       level: f.level,
       ceilingHeight: f.ceilingHeight,
-      rooms: f.rooms.map((r) => ({
-        name: r.name,
-        width: r.width,
-        length: r.depth,
-        area: roomArea(r),
-        x: r.x,
-        y: r.z,
-        category: r.category,
-        hasSlope: r.hasSlope,
-        slopeDetails: r.slopeDetails ?? undefined,
-      })),
+      rooms: f.rooms
+        .filter((r) => !r.isVoid)
+        .map((r) => ({
+          name: r.name,
+          width: r.width,
+          length: r.depth,
+          area: roomArea(r),
+          x: r.x,
+          y: r.z,
+          category: r.category,
+          hasSlope: r.hasSlope,
+          slopeDetails: r.slopeDetails ?? undefined,
+        })),
       floorArea: floorArea(f),
     }));
 
@@ -30,20 +35,18 @@ export function buildingToAnalysis(building: BuildingData): FloorplanAnalysis {
     0
   );
 
-  // Auto-generate cross-section: cut through the middle of the building depth
-  const cutPosition = building.depth / 2;
+  const cutPosition = bDepth / 2;
   const crossSection = {
     cutDirection: "Ost-West durch Gebäudemitte",
     floors: building.floors
       .sort((a, b) => a.level - b.level)
       .map((f) => {
-        // Find rooms that the horizontal cut line intersects
-        const intersecting = f.rooms
+        const nonVoidRooms = f.rooms.filter((r) => !r.isVoid);
+        const intersecting = nonVoidRooms
           .filter((r) => r.z <= cutPosition && r.z + r.depth >= cutPosition)
           .sort((a, b) => a.x - b.x);
 
-        // If no rooms intersect, use all rooms
-        const roomsToUse = intersecting.length > 0 ? intersecting : [...f.rooms].sort((a, b) => a.x - b.x);
+        const roomsToUse = intersecting.length > 0 ? intersecting : [...nonVoidRooms].sort((a, b) => a.x - b.x);
 
         return {
           name: f.name,
@@ -71,8 +74,8 @@ export function buildingToAnalysis(building: BuildingData): FloorplanAnalysis {
     roofPitchDegrees: building.roofSegments.length > 0 ? building.roofSegments[0].pitchDegrees : building.roofPitchDegrees,
     totalLivingArea,
     totalUsableArea,
-    buildingWidth: building.width,
-    buildingDepth: building.depth,
+    buildingWidth: bWidth,
+    buildingDepth: bDepth,
     address: building.address,
     crossSection,
     cutLineDirection: "horizontal",
