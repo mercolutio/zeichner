@@ -279,12 +279,25 @@ function DragPlane({
 }
 
 // ── Floor slab ──
-function FloorSlab({ width, depth, y, floorIndex }: { width: number; depth: number; y: number; floorIndex: number }) {
+function FloorSlab({ width, depth, y, floorIndex, selected, isDragging, onPointerDown }: {
+  width: number; depth: number; y: number; floorIndex: number;
+  selected: boolean; isDragging: boolean;
+  onPointerDown: (e: ThreeEvent<PointerEvent>) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
   const colors = ["#cbd5e1", "#bfdbfe", "#bbf7d0", "#fef08a", "#fecaca"];
+  const baseColor = colors[floorIndex % colors.length];
   return (
-    <mesh position={[width / 2, y - 0.05, depth / 2]} receiveShadow>
+    <mesh position={[width / 2, y - 0.05, depth / 2]} receiveShadow
+      onPointerDown={onPointerDown}
+      onPointerOver={() => setHovered(true)}
+      onPointerOut={() => setHovered(false)}>
       <boxGeometry args={[width + 0.1, 0.1, depth + 0.1]} />
-      <meshStandardMaterial color={colors[floorIndex % colors.length]} opacity={0.4} transparent />
+      <meshStandardMaterial
+        color={isDragging ? "#3b82f6" : selected ? "#60a5fa" : hovered ? "#93c5fd" : baseColor}
+        opacity={isDragging ? 0.6 : selected ? 0.6 : hovered ? 0.5 : 0.4}
+        transparent
+      />
     </mesh>
   );
 }
@@ -457,8 +470,14 @@ function Scene({
   // Find floor Y for the drag plane
   const dragFloorY = useMemo(() => {
     if (!dragRoomId) return 0;
-    // Roof segments drag at the top of the building
     if (dragRoomId.startsWith("roof:")) return totalHeight;
+    // Floor slab drag — find the Y of this floor
+    if (dragRoomId.startsWith("floor:")) {
+      const floorId = dragRoomId.slice(6);
+      for (const { floor, y } of floorPositions) {
+        if (floor.id === floorId) return y;
+      }
+    }
     for (const { floor, y } of floorPositions) {
       if (floor.rooms.some((r) => r.id === dragRoomId)) return y;
     }
@@ -504,7 +523,15 @@ function Scene({
 
         return (
           <group key={floor.id} position={[fx, 0, fz]}>
-            <FloorSlab width={floor.width} depth={floor.depth} y={y} floorIndex={index} />
+            <FloorSlab width={floor.width} depth={floor.depth} y={y} floorIndex={index}
+              selected={selectedRoom === `floor:${floor.id}`}
+              isDragging={dragRoomId === `floor:${floor.id}`}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onSelectRoom(`floor:${floor.id}`);
+                onDragStart(`floor:${floor.id}`, floor.id, e.point.x - fx, e.point.z - fz);
+              }}
+            />
 
             {isActive && floor.rooms.map((room) => (
               <Room3D
@@ -977,6 +1004,18 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
       const rawX = worldX - offsetX;
       const rawZ = worldZ - offsetZ;
 
+      // Dragging a floor slab
+      if (dragRoomId.startsWith("floor:")) {
+        const fId = dragRoomId.slice(6);
+        onChange({
+          ...building,
+          floors: building.floors.map((f) =>
+            f.id === fId ? { ...f, x: snapValue(rawX), z: snapValue(rawZ) } : f
+          ),
+        });
+        return;
+      }
+
       // Dragging a roof segment
       if (dragRoomId.startsWith("roof:")) {
         const roofId = dragRoomId.slice(5);
@@ -1109,6 +1148,27 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
       if (selectedRoom && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         const step = e.shiftKey ? 0.5 : 0.05;
+
+        // Nudge floor slab
+        if (selectedRoom.startsWith("floor:")) {
+          const fId = selectedRoom.slice(6);
+          const floor = building.floors.find((f) => f.id === fId);
+          if (floor) {
+            let x = floor.x || 0;
+            let z = floor.z || 0;
+            if (e.key === "ArrowLeft") x -= step;
+            if (e.key === "ArrowRight") x += step;
+            if (e.key === "ArrowUp") z -= step;
+            if (e.key === "ArrowDown") z += step;
+            updateBuilding({
+              ...building,
+              floors: building.floors.map((f) =>
+                f.id === fId ? { ...f, x: snapValue(x), z: snapValue(z) } : f
+              ),
+            });
+          }
+          return;
+        }
 
         // Nudge roof segment
         if (selectedRoom.startsWith("roof:")) {
