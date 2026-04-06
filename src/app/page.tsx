@@ -5,6 +5,7 @@ import { BuildingData, createBuilding } from "@/types/building";
 import { buildingToAnalysis } from "@/lib/building-to-analysis";
 import dynamic from "next/dynamic";
 import FloorplanView from "@/components/drawing/FloorplanView";
+import BuildingSection from "@/components/drawing/BuildingSection";
 import AreaCalculation from "@/components/analysis/AreaCalculation";
 import FloorSummary from "@/components/analysis/FloorSummary";
 import RoomTable from "@/components/analysis/RoomTable";
@@ -126,6 +127,7 @@ export default function Home() {
             <div className="max-w-3xl mx-auto space-y-6">
               <h2 className="text-2xl font-bold text-gray-900">Grundrisse</h2>
               <FloorplanView building={building} />
+              <BuildingSection building={building} />
             </div>
           </div>
         )}
