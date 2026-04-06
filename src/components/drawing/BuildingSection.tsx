@@ -211,22 +211,23 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
 
       {/* Roof segments */}
       {building.roofSegments.map((seg, i) => {
-        // Determine how this roof segment appears in this section direction
-        // rotation 0 = ridge runs east-west (along X), so section along width sees the gable
-        // rotation 90 = ridge runs north-south (along Z), so section along depth sees the gable
-        const rotRad = (seg.rotation * Math.PI) / 180;
+        // rotation 0 = ridge along X (east-west). The gable face is perpendicular to the ridge.
+        // Querschnitt (width) looks from south → sees gable when ridge is perpendicular to view = along Z (rot ~90°)
+        // Längsschnitt (depth) looks from west → sees gable when ridge is along X (rot ~0°)
+        const rotNorm = ((seg.rotation % 360) + 360) % 360;
         const isGableView = direction === "width"
-          ? Math.abs(Math.cos(rotRad)) > 0.5  // Ridge roughly along X → width section sees gable
-          : Math.abs(Math.sin(rotRad)) > 0.5;  // Ridge roughly along Z → depth section sees gable
+          ? (rotNorm > 45 && rotNorm < 135) || (rotNorm > 225 && rotNorm < 315)  // Ridge ~N-S → gable in width section
+          : rotNorm <= 45 || rotNorm >= 315 || (rotNorm > 135 && rotNorm < 225);  // Ridge ~O-W → gable in depth section
 
-        // Position along the section axis
+        // The span this roof covers along the section axis (accounting for rotation)
+        // For simple cases: use the larger dimension when looking at gable, smaller for side
         const segX = direction === "width" ? seg.x : seg.z;
         const segW = direction === "width" ? seg.width : seg.depth;
 
         const peakH = calcRoofHeight(seg);
 
         // Overhang
-        const overhang = 4;
+        const overhang = 6;
         const leftX = toSvgX(segX) - overhang;
         const rightX = toSvgX(segX + segW) + overhang;
 
@@ -272,6 +273,23 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
           );
         }
       })}
+
+      {/* Total height dimension (left side, including roof) */}
+      {(() => {
+        const topY = maxRoofH > 0 ? roofBaseY - toSvgH(maxRoofH) : roofBaseY;
+        const totalHeightM = totalFloorH + maxRoofH;
+        const x = bL - 30;
+        return (
+          <g>
+            <line x1={x} y1={topY} x2={x} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
+            <line x1={x - 5} y1={topY} x2={x + 5} y2={topY} stroke="#dc2626" strokeWidth={0.5} />
+            <line x1={x - 5} y1={groundY} x2={x + 5} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
+            <text x={x - 3} y={(topY + groundY) / 2 + 3} textAnchor="end" fontSize={8} fill="#dc2626" fontWeight={600} fontFamily="Helvetica, Arial, sans-serif">
+              {totalHeightM.toFixed(2)} m
+            </text>
+          </g>
+        );
+      })()}
 
       {/* Width dimension at bottom */}
       <line x1={bL} y1={groundY + 25} x2={bR} y2={groundY + 25} stroke="#555" strokeWidth={0.5} />
