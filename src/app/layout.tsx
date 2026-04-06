@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Zeichner — KI-Grundrissanalyse",
-  description: "Grundrisse hochladen, Gebäudeschnitte und Flächenberechnungen automatisch erstellen",
+  title: "Zeichner — Gebäude-Modellierer",
+  description: "Gebäude in 3D modellieren, Schnitte zeichnen und Flächenberechnungen erstellen",
 };
 
 export default function RootLayout({
