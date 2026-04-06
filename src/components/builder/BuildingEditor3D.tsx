@@ -275,12 +275,17 @@ function FloorSlab({ width, depth, y, floorIndex }: { width: number; depth: numb
   );
 }
 
-// ── Roof Segment ──
-function RoofSegment3D({ segment, baseY }: { segment: RoofSegment; baseY: number }) {
+// ── Roof Segment 3D ──
+function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown }: {
+  segment: RoofSegment;
+  baseY: number;
+  selected: boolean;
+  isDragging: boolean;
+  onPointerDown: (e: ThreeEvent<PointerEvent>) => void;
+}) {
+  const [hovered, setHovered] = useState(false);
   const { type, pitchDegrees, ridgeDirection, x, z, width, depth } = segment;
 
-  // For east-west ridge: gable profile along X, extruded along Z
-  // For north-south ridge: gable profile along Z, extruded along X
   const profileSpan = ridgeDirection === "east-west" ? width : depth;
   const extrudeLength = ridgeDirection === "east-west" ? depth : width;
   const roofHeight = type === "Flachdach" ? 0.2 : (profileSpan / 2) * Math.tan((pitchDegrees * Math.PI) / 180);
@@ -288,12 +293,26 @@ function RoofSegment3D({ segment, baseY }: { segment: RoofSegment; baseY: number
   const cx = x + width / 2;
   const cz = z + depth / 2;
 
+  const roofColor = isDragging ? "#b45309" : selected ? "#d97706" : hovered ? "#b45309" : "#92400e";
+  const opacity = isDragging ? 0.5 : selected ? 0.85 : 0.7;
+
   if (type === "Flachdach") {
     return (
-      <mesh position={[cx, baseY + 0.1, cz]}>
-        <boxGeometry args={[width + 0.3, 0.2, depth + 0.3]} />
-        <meshStandardMaterial color="#94a3b8" opacity={0.8} transparent />
-      </mesh>
+      <group>
+        <mesh position={[cx, baseY + 0.1, cz]}
+          onPointerDown={onPointerDown}
+          onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}>
+          <boxGeometry args={[width + 0.3, 0.2, depth + 0.3]} />
+          <meshStandardMaterial color={roofColor} opacity={opacity} transparent />
+        </mesh>
+        {selected && (
+          <Html position={[cx, baseY + 0.5, cz]} center>
+            <div className="bg-amber-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none">
+              {segment.name} · {width}×{depth}m
+            </div>
+          </Html>
+        )}
+      </group>
     );
   }
 
@@ -309,7 +328,6 @@ function RoofSegment3D({ segment, baseY }: { segment: RoofSegment; baseY: number
 
   const extrudeSettings = useMemo(() => ({ depth: extrudeLength + 0.3, bevelEnabled: false }), [extrudeLength]);
 
-  // Position and rotation depend on ridge direction
   const position: [number, number, number] = ridgeDirection === "east-west"
     ? [cx, baseY, z - 0.15]
     : [x - 0.15, baseY, cz];
@@ -319,20 +337,27 @@ function RoofSegment3D({ segment, baseY }: { segment: RoofSegment; baseY: number
     : [0, Math.PI / 2, 0];
 
   return (
-    <mesh position={position} rotation={rotation}>
-      <extrudeGeometry args={[shape, extrudeSettings]} />
-      <meshStandardMaterial color="#92400e" opacity={0.7} transparent side={THREE.DoubleSide} />
-    </mesh>
-  );
-}
-
-// ── All Roofs ──
-function Roofs({ segments, baseY }: { segments: RoofSegment[]; baseY: number }) {
-  return (
     <group>
-      {segments.map((seg) => (
-        <RoofSegment3D key={seg.id} segment={seg} baseY={baseY} />
-      ))}
+      <mesh position={position} rotation={rotation}
+        onPointerDown={onPointerDown}
+        onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}>
+        <extrudeGeometry args={[shape, extrudeSettings]} />
+        <meshStandardMaterial color={roofColor} opacity={opacity} transparent side={THREE.DoubleSide} />
+      </mesh>
+      {/* Invisible click box for easier selection (extruded geometry is hard to click) */}
+      <mesh position={[cx, baseY + roofHeight / 2, cz]} visible={false}
+        onPointerDown={onPointerDown}
+        onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}>
+        <boxGeometry args={[width, roofHeight, depth]} />
+        <meshBasicMaterial />
+      </mesh>
+      {selected && (
+        <Html position={[cx, baseY + roofHeight + 0.3, cz]} center>
+          <div className="bg-amber-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none">
+            {segment.name} · {width}×{depth}m · {pitchDegrees}°
+          </div>
+        </Html>
+      )}
     </group>
   );
 }
@@ -399,11 +424,13 @@ function Scene({
   // Find floor Y for the drag plane
   const dragFloorY = useMemo(() => {
     if (!dragRoomId) return 0;
+    // Roof segments drag at the top of the building
+    if (dragRoomId.startsWith("roof:")) return totalHeight;
     for (const { floor, y } of floorPositions) {
       if (floor.rooms.some((r) => r.id === dragRoomId)) return y;
     }
     return 0;
-  }, [dragRoomId, floorPositions]);
+  }, [dragRoomId, floorPositions, totalHeight]);
 
   return (
     <>
@@ -488,7 +515,20 @@ function Scene({
           floorY={snapGuides.floorY} height={snapGuides.height} />
       )}
 
-      {!activeFloorId && <Roofs segments={building.roofSegments} baseY={totalHeight} />}
+      {!activeFloorId && building.roofSegments.map((seg) => (
+        <RoofSegment3D
+          key={seg.id}
+          segment={seg}
+          baseY={totalHeight}
+          selected={selectedRoom === `roof:${seg.id}`}
+          isDragging={dragRoomId === `roof:${seg.id}`}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onSelectRoom(`roof:${seg.id}`);
+            onDragStart(`roof:${seg.id}`, "", e.point.x - seg.x, e.point.z - seg.z);
+          }}
+        />
+      ))}
 
       <OrbitControls ref={controlsRef} target={[centerX, centerY, centerZ]}
         maxPolarAngle={Math.PI * 0.85} minDistance={3} maxDistance={60}
@@ -870,12 +910,32 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
     (worldX: number, worldZ: number) => {
       if (!dragInfo.current || !dragRoomId) return;
       const { floorId, offsetX, offsetZ } = dragInfo.current;
-      const floor = building.floors.find((f) => f.id === floorId);
-      const room = floor?.rooms.find((r) => r.id === dragRoomId);
-      if (!room || !floor) return;
 
       const rawX = worldX - offsetX;
       const rawZ = worldZ - offsetZ;
+
+      // Dragging a roof segment
+      if (dragRoomId.startsWith("roof:")) {
+        const roofId = dragRoomId.slice(5);
+        const seg = building.roofSegments.find((s) => s.id === roofId);
+        if (!seg) return;
+
+        const snapped = snapWithGuides(rawX, rawZ, seg.width, seg.depth, building.width, building.depth, []);
+        setSnapGuides({ x: snapped.guidesX, z: snapped.guidesZ, floorY: building.floors.reduce((s, f) => s + f.ceilingHeight, 0), height: 1 });
+
+        onChange({
+          ...building,
+          roofSegments: building.roofSegments.map((s) =>
+            s.id === roofId ? { ...s, x: snapValue(snapped.x), z: snapValue(snapped.z) } : s
+          ),
+        });
+        return;
+      }
+
+      // Dragging a room
+      const floor = building.floors.find((f) => f.id === floorId);
+      const room = floor?.rooms.find((r) => r.id === dragRoomId);
+      if (!room || !floor) return;
 
       const otherRooms = floor.rooms.filter((r) => r.id !== dragRoomId);
       const snapped = snapWithGuides(rawX, rawZ, room.width, room.depth, building.width, building.depth, otherRooms);
@@ -939,16 +999,27 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
       if ((e.target as HTMLElement).tagName === "INPUT" || (e.target as HTMLElement).tagName === "SELECT") return;
 
       if ((e.key === "Delete" || e.key === "Backspace") && selectedRoom) {
-        for (const floor of building.floors) {
-          if (floor.rooms.find((r) => r.id === selectedRoom)) {
-            setSelectedRoom(null);
-            updateBuilding({
-              ...building,
-              floors: building.floors.map((f) =>
-                f.id === floor.id ? { ...f, rooms: f.rooms.filter((r) => r.id !== selectedRoom) } : f
-              ),
-            });
-            break;
+        // Delete roof segment
+        if (selectedRoom.startsWith("roof:")) {
+          const roofId = selectedRoom.slice(5);
+          setSelectedRoom(null);
+          updateBuilding({
+            ...building,
+            roofSegments: building.roofSegments.filter((s) => s.id !== roofId),
+          });
+        } else {
+          // Delete room
+          for (const floor of building.floors) {
+            if (floor.rooms.find((r) => r.id === selectedRoom)) {
+              setSelectedRoom(null);
+              updateBuilding({
+                ...building,
+                floors: building.floors.map((f) =>
+                  f.id === floor.id ? { ...f, rooms: f.rooms.filter((r) => r.id !== selectedRoom) } : f
+                ),
+              });
+              break;
+            }
           }
         }
       }
@@ -966,25 +1037,46 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
         onChange(historyBuilding);
       }
 
-      // Arrow keys to nudge selected room
+      // Arrow keys to nudge selected item
       if (selectedRoom && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
         e.preventDefault();
         const step = e.shiftKey ? 0.5 : 0.05;
-        for (const floor of building.floors) {
-          const room = floor.rooms.find((r) => r.id === selectedRoom);
-          if (room) {
-            let { x, z } = room;
-            if (e.key === "ArrowLeft") x = Math.max(0, x - step);
-            if (e.key === "ArrowRight") x = Math.min(building.width - room.width, x + step);
-            if (e.key === "ArrowUp") z = Math.max(0, z - step);
-            if (e.key === "ArrowDown") z = Math.min(building.depth - room.depth, z + step);
+
+        // Nudge roof segment
+        if (selectedRoom.startsWith("roof:")) {
+          const roofId = selectedRoom.slice(5);
+          const seg = building.roofSegments.find((s) => s.id === roofId);
+          if (seg) {
+            let { x, z } = seg;
+            if (e.key === "ArrowLeft") x -= step;
+            if (e.key === "ArrowRight") x += step;
+            if (e.key === "ArrowUp") z -= step;
+            if (e.key === "ArrowDown") z += step;
             updateBuilding({
               ...building,
-              floors: building.floors.map((f) =>
-                f.id === floor.id ? { ...f, rooms: f.rooms.map((r) => (r.id === selectedRoom ? { ...r, x: snapValue(x), z: snapValue(z) } : r)) } : f
+              roofSegments: building.roofSegments.map((s) =>
+                s.id === roofId ? { ...s, x: snapValue(x), z: snapValue(z) } : s
               ),
             });
-            break;
+          }
+        } else {
+          // Nudge room
+          for (const floor of building.floors) {
+            const room = floor.rooms.find((r) => r.id === selectedRoom);
+            if (room) {
+              let { x, z } = room;
+              if (e.key === "ArrowLeft") x = Math.max(0, x - step);
+              if (e.key === "ArrowRight") x = Math.min(building.width - room.width, x + step);
+              if (e.key === "ArrowUp") z = Math.max(0, z - step);
+              if (e.key === "ArrowDown") z = Math.min(building.depth - room.depth, z + step);
+              updateBuilding({
+                ...building,
+                floors: building.floors.map((f) =>
+                  f.id === floor.id ? { ...f, rooms: f.rooms.map((r) => (r.id === selectedRoom ? { ...r, x: snapValue(x), z: snapValue(z) } : r)) } : f
+                ),
+              });
+              break;
+            }
           }
         }
       }
