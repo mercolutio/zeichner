@@ -52,7 +52,13 @@ export default function Home() {
         throw new Error(err.error || "Analyse fehlgeschlagen");
       }
 
-      const result: FloorplanAnalysis = await response.json();
+      const raw = await response.json();
+      const result: FloorplanAnalysis = {
+        ...raw,
+        cutLineDirection: raw.cutLineDirection ?? "horizontal",
+        cutLinePosition: raw.cutLinePosition ?? 0,
+        roofPitchDegrees: raw.roofPitchDegrees ?? null,
+      };
       setAnalysis(result);
       setStep("edit");
     } catch (err) {
