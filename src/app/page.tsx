@@ -7,16 +7,7 @@ import RoomTable from "@/components/analysis/RoomTable";
 import AreaCalculation from "@/components/analysis/AreaCalculation";
 import FloorSummary from "@/components/analysis/FloorSummary";
 import CrossSection from "@/components/drawing/CrossSection";
-import dynamic from "next/dynamic";
-
-const Building3D = dynamic(() => import("@/components/drawing/Building3D"), {
-  ssr: false,
-  loading: () => (
-    <div className="bg-white rounded-xl border shadow-sm p-5 h-[500px] flex items-center justify-center text-gray-400">
-      3D-Ansicht wird geladen...
-    </div>
-  ),
-});
+import IsometricView from "@/components/drawing/IsometricView";
 import PdfExportButton from "@/components/pdf/PdfExportButton";
 import AnalysisEditor from "@/components/editor/AnalysisEditor";
 import { ArrowLeft, FileText } from "lucide-react";
@@ -208,8 +199,8 @@ export default function Home() {
               </div>
             )}
 
-            {/* 3D-Ansicht (volle Breite) */}
-            <Building3D analysis={analysis} />
+            {/* Isometrische Ansicht */}
+            <IsometricView analysis={analysis} />
 
             {/* Schnitt */}
             <CrossSection analysis={analysis} />
