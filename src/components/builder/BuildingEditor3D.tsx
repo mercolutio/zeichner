@@ -362,6 +362,29 @@ function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown }: 
   );
 }
 
+// ── Camera controller for top-down view ──
+function CameraController({ topView, centerX, centerZ, viewHeight }: {
+  topView: boolean;
+  centerX: number;
+  centerZ: number;
+  viewHeight: number;
+}) {
+  const { camera } = useThree();
+  const prevTopView = useRef(false);
+
+  useEffect(() => {
+    if (topView && !prevTopView.current) {
+      camera.position.set(centerX, viewHeight, centerZ);
+      camera.lookAt(centerX, 0, centerZ);
+      (camera as THREE.PerspectiveCamera).fov = 50;
+      (camera as THREE.PerspectiveCamera).updateProjectionMatrix();
+    }
+    prevTopView.current = topView;
+  }, [topView, centerX, centerZ, viewHeight, camera]);
+
+  return null;
+}
+
 // ── Building outline ──
 function BuildingOutline({ width, depth }: { width: number; depth: number }) {
   const points = useMemo((): [number, number, number][] => [
@@ -376,6 +399,7 @@ function Scene({
   selectedRoom,
   exploded,
   activeFloorId,
+  topView,
   snapGuides,
   dragRoomId,
   onSelectRoom,
@@ -387,6 +411,7 @@ function Scene({
   selectedRoom: string | null;
   exploded: boolean;
   activeFloorId: string | null;
+  topView: boolean;
   snapGuides: { x: number[]; z: number[]; floorY: number; height: number } | null;
   dragRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
@@ -530,8 +555,15 @@ function Scene({
         />
       ))}
 
-      <OrbitControls ref={controlsRef} target={[centerX, centerY, centerZ]}
-        maxPolarAngle={Math.PI * 0.85} minDistance={3} maxDistance={60}
+      <CameraController topView={topView} centerX={centerX} centerZ={centerZ}
+        viewHeight={Math.max(building.width, building.depth) * 1.2 + totalHeight} />
+
+      <OrbitControls ref={controlsRef}
+        target={[centerX, topView ? 0 : centerY, centerZ]}
+        maxPolarAngle={topView ? 0.01 : Math.PI * 0.85}
+        minPolarAngle={topView ? 0 : 0}
+        enableRotate={!topView}
+        minDistance={3} maxDistance={80}
         enableDamping dampingFactor={0.05}
         mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }} />
     </>
@@ -876,6 +908,7 @@ function useHistory<T>(initial: T) {
 export default function BuildingEditor3D({ building, onChange }: BuildingEditor3DProps) {
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [exploded, setExploded] = useState(false);
+  const [topView, setTopView] = useState(false);
   const [activeFloorId, setActiveFloorId] = useState<string | null>(null);
   const [snapGuides, setSnapGuides] = useState<{ x: number[]; z: number[]; floorY: number; height: number } | null>(null);
   const { current: historyBuilding, push: pushHistory, undo, redo, canUndo, canRedo } = useHistory(building);
@@ -1105,6 +1138,7 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
             selectedRoom={selectedRoom}
             exploded={exploded}
             activeFloorId={activeFloorId}
+            topView={topView}
             snapGuides={snapGuides}
             dragRoomId={dragRoomId}
             onSelectRoom={setSelectedRoom}
@@ -1119,6 +1153,10 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
           <button onClick={() => setExploded(!exploded)}
             className={`px-3 py-1.5 text-xs rounded-lg border shadow-sm transition-colors ${exploded ? "bg-blue-600 border-blue-700 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
             {exploded ? "Zusammenklappen" : "Explosionsansicht"}
+          </button>
+          <button onClick={() => setTopView(!topView)}
+            className={`px-3 py-1.5 text-xs rounded-lg border shadow-sm transition-colors ${topView ? "bg-blue-600 border-blue-700 text-white" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}>
+            {topView ? "3D-Ansicht" : "Draufsicht"}
           </button>
           <button onClick={undo} disabled={!canUndo}
             className="px-2 py-1.5 text-xs rounded-lg border shadow-sm bg-white border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed"
