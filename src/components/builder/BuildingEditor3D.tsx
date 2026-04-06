@@ -266,14 +266,18 @@ function BuildingOutline({ width, depth }: { width: number; depth: number }) {
 function Scene({
   building,
   selectedRoom,
+  exploded,
   onSelectRoom,
   onRoomMove,
 }: {
   building: BuildingData;
   selectedRoom: string | null;
+  exploded: boolean;
   onSelectRoom: (id: string | null) => void;
   onRoomMove: (roomId: string, floorId: string, x: number, z: number) => void;
 }) {
+  const EXPLODE_GAP = 1.5;
+
   const sortedFloors = useMemo(
     () => [...building.floors].sort((a, b) => a.level - b.level),
     [building.floors]
@@ -282,7 +286,7 @@ function Scene({
   let currentY = 0;
   const floorPositions = sortedFloors.map((floor, i) => {
     const y = currentY;
-    currentY += floor.ceilingHeight;
+    currentY += floor.ceilingHeight + (exploded ? EXPLODE_GAP : 0);
     return { floor, y, index: i };
   });
 
@@ -679,6 +683,7 @@ function SidePanel({
 // ── Main Component ──
 export default function BuildingEditor3D({ building, onChange }: BuildingEditor3DProps) {
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
+  const [exploded, setExploded] = useState(false);
 
   const handleRoomMove = useCallback(
     (roomId: string, floorId: string, x: number, z: number) => {
@@ -721,10 +726,25 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
           <Scene
             building={building}
             selectedRoom={selectedRoom}
+            exploded={exploded}
             onSelectRoom={setSelectedRoom}
             onRoomMove={handleRoomMove}
           />
         </Canvas>
+
+        {/* Toolbar overlay */}
+        <div className="absolute top-4 left-4 flex gap-2">
+          <button
+            onClick={() => setExploded(!exploded)}
+            className={`px-3 py-1.5 text-xs rounded-lg border shadow-sm transition-colors ${
+              exploded
+                ? "bg-blue-600 border-blue-700 text-white"
+                : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            {exploded ? "Zusammenklappen" : "Explosionsansicht"}
+          </button>
+        </div>
 
         {/* Instructions overlay */}
         <div className="absolute bottom-4 left-4 text-xs text-gray-500 bg-white/80 backdrop-blur rounded-lg px-3 py-2">
