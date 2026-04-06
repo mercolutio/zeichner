@@ -67,8 +67,8 @@ export function buildingToAnalysis(building: BuildingData): FloorplanAnalysis {
   return {
     buildingType: building.buildingType,
     floors,
-    roofType: building.roofType,
-    roofPitchDegrees: building.roofPitchDegrees,
+    roofType: building.roofSegments.length > 0 ? building.roofSegments[0].type : building.roofType,
+    roofPitchDegrees: building.roofSegments.length > 0 ? building.roofSegments[0].pitchDegrees : building.roofPitchDegrees,
     totalLivingArea,
     totalUsableArea,
     buildingWidth: building.width,

@@ -35,14 +35,30 @@ export interface FloorData {
   rooms: RoomData[];
 }
 
+export type RidgeDirection = "east-west" | "north-south";
+
+export interface RoofSegment {
+  id: string;
+  name: string;
+  type: RoofType;
+  pitchDegrees: number;
+  ridgeDirection: RidgeDirection; // Firstrichtung
+  x: number;        // Position vom linken Gebäuderand
+  z: number;        // Position vom vorderen Gebäuderand
+  width: number;    // Breite (X)
+  depth: number;    // Tiefe (Z)
+}
+
 export interface BuildingData {
   buildingType: string;
   width: number;       // Gebäudebreite (X)
   depth: number;       // Gebäudetiefe (Z)
   floors: FloorData[];
+  roofSegments: RoofSegment[];
+  address?: string;
+  // Legacy — wird ignoriert wenn roofSegments.length > 0
   roofType: RoofType;
   roofPitchDegrees: number;
-  address?: string;
 }
 
 export function createRoom(partial?: Partial<RoomData>): RoomData {
@@ -70,6 +86,21 @@ export function createFloor(partial?: Partial<FloorData>): FloorData {
   };
 }
 
+export function createRoofSegment(partial?: Partial<RoofSegment>): RoofSegment {
+  return {
+    id: crypto.randomUUID(),
+    name: "Hauptdach",
+    type: "Satteldach",
+    pitchDegrees: 35,
+    ridgeDirection: "east-west",
+    x: 0,
+    z: 0,
+    width: 10,
+    depth: 8,
+    ...partial,
+  };
+}
+
 export function createBuilding(): BuildingData {
   return {
     buildingType: "Einfamilienhaus",
@@ -86,6 +117,9 @@ export function createBuilding(): BuildingData {
           createRoom({ name: "Bad", width: 3, depth: 2.5, x: 0, z: 4, category: "nutzraum" }),
         ],
       }),
+    ],
+    roofSegments: [
+      createRoofSegment({ name: "Hauptdach", width: 10, depth: 8 }),
     ],
     roofType: "Satteldach",
     roofPitchDegrees: 35,

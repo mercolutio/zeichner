@@ -10,8 +10,11 @@ import {
   RoomData,
   RoofType,
   RoomCategory,
+  RoofSegment,
+  RidgeDirection,
   createRoom,
   createFloor,
+  createRoofSegment,
   roomArea,
 } from "@/types/building";
 
@@ -330,36 +333,65 @@ function FloorSlab({ width, depth, y, floorIndex }: { width: number; depth: numb
   );
 }
 
-// ── Roof ──
-function Roof({ width, depth, baseY, roofType, pitch }: { width: number; depth: number; baseY: number; roofType: RoofType; pitch: number }) {
-  const roofHeight = roofType === "Flachdach" ? 0.2 : (width / 2) * Math.tan((pitch * Math.PI) / 180);
+// ── Roof Segment ──
+function RoofSegment3D({ segment, baseY }: { segment: RoofSegment; baseY: number }) {
+  const { type, pitchDegrees, ridgeDirection, x, z, width, depth } = segment;
 
-  if (roofType === "Flachdach") {
+  // For east-west ridge: gable profile along X, extruded along Z
+  // For north-south ridge: gable profile along Z, extruded along X
+  const profileSpan = ridgeDirection === "east-west" ? width : depth;
+  const extrudeLength = ridgeDirection === "east-west" ? depth : width;
+  const roofHeight = type === "Flachdach" ? 0.2 : (profileSpan / 2) * Math.tan((pitchDegrees * Math.PI) / 180);
+
+  const cx = x + width / 2;
+  const cz = z + depth / 2;
+
+  if (type === "Flachdach") {
     return (
-      <mesh position={[width / 2, baseY + 0.1, depth / 2]}>
-        <boxGeometry args={[width + 0.4, 0.2, depth + 0.4]} />
-        <meshStandardMaterial color="#94a3b8" />
+      <mesh position={[cx, baseY + 0.1, cz]}>
+        <boxGeometry args={[width + 0.3, 0.2, depth + 0.3]} />
+        <meshStandardMaterial color="#94a3b8" opacity={0.8} transparent />
       </mesh>
     );
   }
 
   const shape = useMemo(() => {
     const s = new THREE.Shape();
-    const hw = width / 2 + 0.2;
+    const hw = profileSpan / 2 + 0.15;
     s.moveTo(-hw, 0);
     s.lineTo(0, roofHeight);
     s.lineTo(hw, 0);
     s.lineTo(-hw, 0);
     return s;
-  }, [width, roofHeight]);
+  }, [profileSpan, roofHeight]);
 
-  const extrudeSettings = useMemo(() => ({ depth: depth + 0.4, bevelEnabled: false }), [depth]);
+  const extrudeSettings = useMemo(() => ({ depth: extrudeLength + 0.3, bevelEnabled: false }), [extrudeLength]);
+
+  // Position and rotation depend on ridge direction
+  const position: [number, number, number] = ridgeDirection === "east-west"
+    ? [cx, baseY, z - 0.15]
+    : [x - 0.15, baseY, cz];
+
+  const rotation: [number, number, number] = ridgeDirection === "east-west"
+    ? [0, 0, 0]
+    : [0, Math.PI / 2, 0];
 
   return (
-    <mesh position={[width / 2, baseY, -0.2]}>
+    <mesh position={position} rotation={rotation}>
       <extrudeGeometry args={[shape, extrudeSettings]} />
       <meshStandardMaterial color="#92400e" opacity={0.7} transparent side={THREE.DoubleSide} />
     </mesh>
+  );
+}
+
+// ── All Roofs ──
+function Roofs({ segments, baseY }: { segments: RoofSegment[]; baseY: number }) {
+  return (
+    <group>
+      {segments.map((seg) => (
+        <RoofSegment3D key={seg.id} segment={seg} baseY={baseY} />
+      ))}
+    </group>
   );
 }
 
@@ -529,9 +561,9 @@ function Scene({
         />
       )}
 
-      {/* Roof: only show when viewing all floors */}
+      {/* Roofs: only show when viewing all floors */}
       {!activeFloorId && (
-        <Roof width={building.width} depth={building.depth} baseY={totalHeight - (exploded ? EXPLODE_GAP * (sortedFloors.length - 1) : 0) + (exploded ? EXPLODE_GAP * sortedFloors.length : 0)} roofType={building.roofType} pitch={building.roofPitchDegrees} />
+        <Roofs segments={building.roofSegments} baseY={totalHeight} />
       )}
 
       <OrbitControls
@@ -651,19 +683,74 @@ function SidePanel({
           <input type="number" step="0.1" value={building.width} onChange={(e) => onChange({ ...building, width: +e.target.value || 1 })} className="border rounded px-2 py-1 text-right" />
           <label className="text-gray-600 self-center">Tiefe (m)</label>
           <input type="number" step="0.1" value={building.depth} onChange={(e) => onChange({ ...building, depth: +e.target.value || 1 })} className="border rounded px-2 py-1 text-right" />
-          <label className="text-gray-600 self-center">Dach</label>
-          <select value={building.roofType} onChange={(e) => onChange({ ...building, roofType: e.target.value as RoofType })} className="border rounded px-2 py-1">
-            <option value="Satteldach">Satteldach</option>
-            <option value="Flachdach">Flachdach</option>
-            <option value="Walmdach">Walmdach</option>
-            <option value="Pultdach">Pultdach</option>
-          </select>
-          {building.roofType !== "Flachdach" && (
-            <>
-              <label className="text-gray-600 self-center">Neigung (°)</label>
-              <input type="number" step="1" min="10" max="60" value={building.roofPitchDegrees} onChange={(e) => onChange({ ...building, roofPitchDegrees: +e.target.value || 35 })} className="border rounded px-2 py-1 text-right" />
-            </>
-          )}
+        </div>
+      </div>
+
+      {/* Roof segments */}
+      <div className="p-4 border-b">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm text-gray-800">Dächer</h3>
+          <button
+            onClick={() => onChange({ ...building, roofSegments: [...building.roofSegments, createRoofSegment({ name: `Dach ${building.roofSegments.length + 1}`, width: 4, depth: 4, x: 0, z: 0 })] })}
+            className="text-xs text-blue-600 hover:text-blue-800"
+          >
+            + Dach
+          </button>
+        </div>
+        <div className="space-y-2">
+          {building.roofSegments.map((seg, i) => (
+            <div key={seg.id} className="bg-gray-50 rounded-lg p-2 text-xs space-y-1.5">
+              <div className="flex items-center justify-between">
+                <input
+                  value={seg.name}
+                  onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, name: e.target.value } : s) })}
+                  className="font-medium bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none flex-1"
+                />
+                {building.roofSegments.length > 1 && (
+                  <button onClick={() => onChange({ ...building, roofSegments: building.roofSegments.filter((s) => s.id !== seg.id) })} className="text-red-400 hover:text-red-600 ml-1 p-0.5">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                <select
+                  value={seg.type}
+                  onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, type: e.target.value as RoofType } : s) })}
+                  className="col-span-2 border rounded px-1 py-0.5 bg-white"
+                >
+                  <option value="Satteldach">Sattel</option>
+                  <option value="Flachdach">Flach</option>
+                  <option value="Walmdach">Walm</option>
+                  <option value="Pultdach">Pult</option>
+                </select>
+                {seg.type !== "Flachdach" && (
+                  <>
+                    <input type="number" step="1" min="10" max="60" value={seg.pitchDegrees} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, pitchDegrees: +e.target.value || 35 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Neigung °" />
+                    <select
+                      value={seg.ridgeDirection}
+                      onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, ridgeDirection: e.target.value as RidgeDirection } : s) })}
+                      className="border rounded px-1 py-0.5 bg-white" title="Firstrichtung"
+                    >
+                      <option value="east-west">O-W</option>
+                      <option value="north-south">N-S</option>
+                    </select>
+                  </>
+                )}
+              </div>
+              <div className="grid grid-cols-4 gap-1">
+                <input type="number" step="0.1" value={seg.x} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, x: +e.target.value } : s) })} className="border rounded px-1 py-0.5 text-right" title="X" />
+                <input type="number" step="0.1" value={seg.z} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, z: +e.target.value } : s) })} className="border rounded px-1 py-0.5 text-right" title="Z" />
+                <input type="number" step="0.1" value={seg.width} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, width: +e.target.value || 1 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Breite" />
+                <input type="number" step="0.1" value={seg.depth} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, depth: +e.target.value || 1 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Tiefe" />
+              </div>
+              <div className="flex gap-1 text-[10px] text-gray-400">
+                <span className="flex-1 text-center">X</span>
+                <span className="flex-1 text-center">Z</span>
+                <span className="flex-1 text-center">B</span>
+                <span className="flex-1 text-center">T</span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 
