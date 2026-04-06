@@ -32,8 +32,31 @@ function loadBuilding(): BuildingData {
   if (typeof window === "undefined") return createBuilding();
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved) as BuildingData;
-  } catch { /* ignore */ }
+    if (saved) {
+      const data = JSON.parse(saved);
+      // Validate essential structure
+      if (
+        !data ||
+        !Array.isArray(data.floors) ||
+        data.floors.length === 0 ||
+        typeof data.floors[0].width !== "number" ||
+        !Array.isArray(data.roofSegments)
+      ) {
+        // Old/invalid schema — discard
+        localStorage.removeItem(STORAGE_KEY);
+        return createBuilding();
+      }
+      // Ensure all rooms have isVoid
+      for (const floor of data.floors) {
+        for (const room of floor.rooms) {
+          if (typeof room.isVoid !== "boolean") room.isVoid = false;
+        }
+      }
+      return data as BuildingData;
+    }
+  } catch {
+    localStorage.removeItem(STORAGE_KEY);
+  }
   return createBuilding();
 }
 
