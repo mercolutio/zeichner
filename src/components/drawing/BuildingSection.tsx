@@ -211,34 +211,66 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
 
       {/* Roof segments */}
       {building.roofSegments.map((seg, i) => {
-        const profileW = seg.width;
-        const roofH = calcRoofHeight(seg);
+        // Determine how this roof segment appears in this section direction
+        // rotation 0 = ridge runs east-west (along X), so section along width sees the gable
+        // rotation 90 = ridge runs north-south (along Z), so section along depth sees the gable
+        const rotRad = (seg.rotation * Math.PI) / 180;
+        const isGableView = direction === "width"
+          ? Math.abs(Math.cos(rotRad)) > 0.5  // Ridge roughly along X → width section sees gable
+          : Math.abs(Math.sin(rotRad)) > 0.5;  // Ridge roughly along Z → depth section sees gable
+
+        // Position along the section axis
         const segX = direction === "width" ? seg.x : seg.z;
         const segW = direction === "width" ? seg.width : seg.depth;
 
+        const peakH = calcRoofHeight(seg);
+
+        // Overhang
+        const overhang = 4;
+        const leftX = toSvgX(segX) - overhang;
+        const rightX = toSvgX(segX + segW) + overhang;
+
         if (seg.type === "Flachdach") {
           return (
-            <rect key={i} x={toSvgX(segX) - 5} y={roofBaseY - 5} width={segW * scaleX + 10} height={5} fill="#d4d4d4" stroke={STROKE} strokeWidth={1} />
+            <rect key={i} x={leftX} y={roofBaseY - 5} width={rightX - leftX} height={5} fill="#d4d4d4" stroke={STROKE} strokeWidth={1} />
           );
         }
 
-        const peakX = toSvgX(segX + segW / 2);
-        const leftX = toSvgX(segX) - 8;
-        const rightX = toSvgX(segX + segW) + 8;
-        const peakY = roofBaseY - toSvgH(roofH);
+        if (isGableView) {
+          // Gable view — triangle peak in the middle
+          const peakSvgX = toSvgX(segX + segW / 2);
+          const peakY = roofBaseY - toSvgH(peakH);
 
-        return (
-          <g key={i}>
-            <line x1={leftX} y1={roofBaseY + 3} x2={peakX} y2={peakY} stroke={STROKE} strokeWidth={1.5} />
-            <line x1={peakX} y1={peakY} x2={rightX} y2={roofBaseY + 3} stroke={STROKE} strokeWidth={1.5} />
-            <rect x={peakX - 2} y={peakY - 2} width={4} height={3} fill={STROKE} rx={1} />
-            {seg.pitchDegrees && (
-              <text x={leftX + (peakX - leftX) * 0.35} y={roofBaseY - (roofBaseY - peakY) * 0.35} fontSize={8} fill="#555" fontFamily="Helvetica, Arial, sans-serif">
+          return (
+            <g key={i}>
+              <line x1={leftX} y1={roofBaseY} x2={peakSvgX} y2={peakY} stroke={STROKE} strokeWidth={1.5} />
+              <line x1={peakSvgX} y1={peakY} x2={rightX} y2={roofBaseY} stroke={STROKE} strokeWidth={1.5} />
+              {/* Ridge cap */}
+              <rect x={peakSvgX - 2} y={peakY - 2} width={4} height={3} fill={STROKE} rx={1} />
+              {/* Pitch label */}
+              <text x={leftX + (peakSvgX - leftX) * 0.35} y={roofBaseY - (roofBaseY - peakY) * 0.3 - 3} fontSize={8} fill="#555" fontFamily="Helvetica, Arial, sans-serif">
                 {seg.pitchDegrees}°
               </text>
-            )}
-          </g>
-        );
+            </g>
+          );
+        } else {
+          // Side view — flat ridge line at peak height
+          const peakY = roofBaseY - toSvgH(peakH);
+
+          return (
+            <g key={i}>
+              {/* Ridge line across the top */}
+              <line x1={leftX} y1={peakY} x2={rightX} y2={peakY} stroke={STROKE} strokeWidth={1.5} />
+              {/* Left slope connection */}
+              <line x1={leftX} y1={roofBaseY} x2={leftX} y2={peakY} stroke={STROKE} strokeWidth={1.5} />
+              {/* Right slope connection */}
+              <line x1={rightX} y1={roofBaseY} x2={rightX} y2={peakY} stroke={STROKE} strokeWidth={1.5} />
+              {/* Ridge cap dots */}
+              <rect x={leftX - 1} y={peakY - 2} width={3} height={3} fill={STROKE} rx={1} />
+              <rect x={rightX - 1} y={peakY - 2} width={3} height={3} fill={STROKE} rx={1} />
+            </g>
+          );
+        }
       })}
 
       {/* Width dimension at bottom */}
