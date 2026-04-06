@@ -870,7 +870,6 @@ function SidePanel({
                 <span className="text-[10px] text-gray-400 self-center">= {calcRoofHeight(seg).toFixed(2)} m</span>
               </div>
               )}
-              </div>
               <div className="grid grid-cols-4 gap-1">
                 <input type="number" step="0.1" value={seg.x} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, x: +e.target.value } : s) })} className="border rounded px-1 py-0.5 text-right" title="X" />
                 <input type="number" step="0.1" value={seg.z} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, z: +e.target.value } : s) })} className="border rounded px-1 py-0.5 text-right" title="Z" />
