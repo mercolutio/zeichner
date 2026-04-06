@@ -1004,13 +1004,63 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
       const rawX = worldX - offsetX;
       const rawZ = worldZ - offsetZ;
 
-      // Dragging a floor slab
+      // Dragging a floor slab — snap to other floor edges
       if (dragRoomId.startsWith("floor:")) {
         const fId = dragRoomId.slice(6);
+        const thisFloor = building.floors.find((f) => f.id === fId);
+        if (!thisFloor) return;
+
+        let sx = snapValue(rawX);
+        let sz = snapValue(rawZ);
+        const gx: number[] = [];
+        const gz: number[] = [];
+        const threshold = 0.3;
+
+        // Snap to origin
+        if (Math.abs(sx) < threshold) { sx = 0; gx.push(0); }
+        if (Math.abs(sz) < threshold) { sz = 0; gz.push(0); }
+
+        // Snap to other floors' edges
+        for (const other of building.floors) {
+          if (other.id === fId) continue;
+          const ox = other.x || 0;
+          const oz = other.z || 0;
+
+          // X edges: left-to-left, left-to-right, right-to-left, right-to-right
+          const edgesX = [ox, ox + other.width];
+          const myEdgesX = [sx, sx + thisFloor.width];
+          for (const e of edgesX) {
+            for (const m of myEdgesX) {
+              if (Math.abs(m - e) < threshold) {
+                sx += e - m;
+                gx.push(e);
+              }
+            }
+          }
+          // Z edges
+          const edgesZ = [oz, oz + other.depth];
+          const myEdgesZ = [sz, sz + thisFloor.depth];
+          for (const e of edgesZ) {
+            for (const m of myEdgesZ) {
+              if (Math.abs(m - e) < threshold) {
+                sz += e - m;
+                gz.push(e);
+              }
+            }
+          }
+        }
+
+        setSnapGuides({
+          x: gx,
+          z: gz,
+          floorY: building.floors.sort((a, b) => a.level - b.level).reduce((y, f) => f.id === fId ? y : y + f.ceilingHeight, 0),
+          height: thisFloor.ceilingHeight,
+        });
+
         onChange({
           ...building,
           floors: building.floors.map((f) =>
-            f.id === fId ? { ...f, x: snapValue(rawX), z: snapValue(rawZ) } : f
+            f.id === fId ? { ...f, x: sx, z: sz } : f
           ),
         });
         return;
