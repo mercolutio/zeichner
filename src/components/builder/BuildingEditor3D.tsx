@@ -139,104 +139,40 @@ function DimensionLine({ start, end, offset, label }: {
   );
 }
 
-// ── Room Box in 3D ──
+// ── Room Box in 3D (display only, drag handled by DragPlane) ──
 function Room3D({
   room,
   floorY,
   ceilingHeight,
   selected,
-  onSelect,
-  onDrag,
-  onDragStart,
-  onDragEnd,
-  onResize,
+  isDragging,
+  onPointerDown,
 }: {
   room: RoomData;
   floorY: number;
   ceilingHeight: number;
   selected: boolean;
-  onSelect: () => void;
-  onDrag: (dx: number, dz: number) => void;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onResize: (edge: string, delta: number) => void;
+  isDragging: boolean;
+  onPointerDown: (e: ThreeEvent<PointerEvent>) => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const [resizing, setResizing] = useState<string | null>(null);
-  const dragRef = useRef({ x: 0, z: 0 });
-  const resizeRef = useRef(0);
-
   const color = CATEGORY_COLORS[room.category];
   const wallH = ceilingHeight * 0.95;
   const cx = room.x + room.width / 2;
   const cz = room.z + room.depth / 2;
 
-  const handlePointerDown = useCallback(
-    (e: ThreeEvent<PointerEvent>) => {
-      e.stopPropagation();
-      onSelect();
-      setDragging(true);
-      onDragStart();
-      dragRef.current = { x: e.point.x, z: e.point.z };
-    },
-    [onSelect, onDragStart]
-  );
-
-  const handlePointerMove = useCallback(
-    (e: ThreeEvent<PointerEvent>) => {
-      if (dragging) {
-        e.stopPropagation();
-        const dx = e.point.x - dragRef.current.x;
-        const dz = e.point.z - dragRef.current.z;
-        dragRef.current = { x: e.point.x, z: e.point.z };
-        onDrag(dx, dz);
-      }
-      if (resizing) {
-        e.stopPropagation();
-        const val = resizing === "right" || resizing === "left" ? e.point.x : e.point.z;
-        const delta = val - resizeRef.current;
-        resizeRef.current = val;
-        onResize(resizing, delta);
-      }
-    },
-    [dragging, resizing, onDrag, onResize]
-  );
-
-  const handlePointerUp = useCallback(() => {
-    if (dragging) { setDragging(false); onDragEnd(); }
-    if (resizing) setResizing(null);
-  }, [dragging, resizing, onDragEnd]);
-
-  // Resize handles for selected room
-  const handleSize = 0.15;
-  const handles = selected
-    ? [
-        { id: "right", pos: [room.width / 2, 0, 0] as [number, number, number], cursor: "ew-resize" },
-        { id: "left", pos: [-room.width / 2, 0, 0] as [number, number, number], cursor: "ew-resize" },
-        { id: "front", pos: [0, 0, room.depth / 2] as [number, number, number], cursor: "ns-resize" },
-        { id: "back", pos: [0, 0, -room.depth / 2] as [number, number, number], cursor: "ns-resize" },
-      ]
-    : [];
-
   return (
     <group position={[cx, floorY + wallH / 2, cz]}>
       {/* Room body */}
       <mesh
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
+        onPointerDown={onPointerDown}
         onPointerOver={() => setHovered(true)}
-        onPointerOut={() => {
-          setHovered(false);
-          if (dragging) { setDragging(false); onDragEnd(); }
-          if (resizing) setResizing(null);
-        }}
+        onPointerOut={() => setHovered(false)}
       >
         <boxGeometry args={[room.width, wallH, room.depth]} />
         <meshStandardMaterial
-          color={dragging ? "#2563eb" : selected ? "#3b82f6" : hovered ? "#60a5fa" : color}
-          opacity={dragging ? 0.5 : selected ? 0.75 : 0.65}
+          color={isDragging ? "#2563eb" : selected ? "#3b82f6" : hovered ? "#60a5fa" : color}
+          opacity={isDragging ? 0.5 : selected ? 0.75 : 0.65}
           transparent
           side={THREE.DoubleSide}
         />
@@ -245,52 +181,34 @@ function Room3D({
       {/* Edges */}
       <lineSegments>
         <edgesGeometry args={[new THREE.BoxGeometry(room.width, wallH, room.depth)]} />
-        <lineBasicMaterial color={selected || dragging ? "#1d4ed8" : hovered ? "#3b82f6" : "#64748b"} />
+        <lineBasicMaterial color={selected || isDragging ? "#1d4ed8" : hovered ? "#3b82f6" : "#64748b"} />
       </lineSegments>
 
       {/* Room name on floor */}
-      <Text
-        position={[0, -wallH / 2 + 0.05, -room.depth * 0.1]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={Math.min(room.width, room.depth) * 0.16}
-        color="#1e293b"
-        anchorX="center"
-        anchorY="middle"
-        maxWidth={room.width * 0.85}
-      >
+      <Text position={[0, -wallH / 2 + 0.05, -room.depth * 0.1]} rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={Math.min(room.width, room.depth) * 0.16} color="#1e293b" anchorX="center" anchorY="middle" maxWidth={room.width * 0.85}>
         {room.name}
       </Text>
-      <Text
-        position={[0, -wallH / 2 + 0.05, room.depth * 0.15]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        fontSize={Math.min(room.width, room.depth) * 0.11}
-        color="#64748b"
-        anchorX="center"
-        anchorY="middle"
-      >
+      <Text position={[0, -wallH / 2 + 0.05, room.depth * 0.15]} rotation={[-Math.PI / 2, 0, 0]}
+        fontSize={Math.min(room.width, room.depth) * 0.11} color="#64748b" anchorX="center" anchorY="middle">
         {roomArea(room).toFixed(1)} m²
       </Text>
 
       {/* Resize handles */}
-      {handles.map((h) => (
-        <mesh
-          key={h.id}
-          position={h.pos}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            setResizing(h.id);
-            resizeRef.current = h.id === "right" || h.id === "left" ? e.point.x : e.point.z;
-          }}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-        >
-          <sphereGeometry args={[handleSize, 8, 8]} />
+      {selected && !isDragging && ([
+        { id: "right", pos: [room.width / 2, 0, 0] },
+        { id: "left", pos: [-room.width / 2, 0, 0] },
+        { id: "front", pos: [0, 0, room.depth / 2] },
+        { id: "back", pos: [0, 0, -room.depth / 2] },
+      ] as { id: string; pos: [number, number, number] }[]).map((h) => (
+        <mesh key={h.id} position={h.pos}>
+          <sphereGeometry args={[0.15, 8, 8]} />
           <meshStandardMaterial color="#f59e0b" />
         </mesh>
       ))}
 
       {/* Hover tooltip */}
-      {hovered && !dragging && !resizing && (
+      {hovered && !isDragging && (
         <Html position={[0, wallH / 2 + 0.4, 0]} center>
           <div className="bg-gray-900 text-white text-xs px-2.5 py-1.5 rounded-lg shadow-lg whitespace-nowrap pointer-events-none">
             <strong>{room.name}</strong>
@@ -302,23 +220,47 @@ function Room3D({
       )}
 
       {/* Selected room dimensions */}
-      {selected && !dragging && (
+      {selected && !isDragging && (
         <>
           <DimensionLine
             start={[-room.width / 2, -wallH / 2, room.depth / 2 + 0.3]}
             end={[room.width / 2, -wallH / 2, room.depth / 2 + 0.3]}
-            offset={[0, 0, 0]}
-            label={`${room.width.toFixed(2)} m`}
+            offset={[0, 0, 0]} label={`${room.width.toFixed(2)} m`}
           />
           <DimensionLine
             start={[room.width / 2 + 0.3, -wallH / 2, -room.depth / 2]}
             end={[room.width / 2 + 0.3, -wallH / 2, room.depth / 2]}
-            offset={[0, 0, 0]}
-            label={`${room.depth.toFixed(2)} m`}
+            offset={[0, 0, 0]} label={`${room.depth.toFixed(2)} m`}
           />
         </>
       )}
     </group>
+  );
+}
+
+// ── Drag Plane: invisible plane at floor height that captures all mouse movement during drag ──
+function DragPlane({
+  active,
+  floorY,
+  onMove,
+  onUp,
+}: {
+  active: boolean;
+  floorY: number;
+  onMove: (point: THREE.Vector3) => void;
+  onUp: () => void;
+}) {
+  if (!active) return null;
+  return (
+    <mesh
+      position={[0, floorY + 0.01, 0]}
+      rotation={[-Math.PI / 2, 0, 0]}
+      onPointerMove={(e) => { e.stopPropagation(); onMove(e.point); }}
+      onPointerUp={(e) => { e.stopPropagation(); onUp(); }}
+    >
+      <planeGeometry args={[200, 200]} />
+      <meshBasicMaterial visible={false} />
+    </mesh>
   );
 }
 
@@ -410,22 +352,22 @@ function Scene({
   exploded,
   activeFloorId,
   snapGuides,
+  dragRoomId,
   onSelectRoom,
-  onRoomDrag,
-  onRoomDragStart,
-  onRoomDragEnd,
-  onRoomResize,
+  onRoomMoveTo,
+  onDragStart,
+  onDragEnd,
 }: {
   building: BuildingData;
   selectedRoom: string | null;
   exploded: boolean;
-  activeFloorId: string | null; // null = alle Stockwerke
+  activeFloorId: string | null;
   snapGuides: { x: number[]; z: number[]; floorY: number; height: number } | null;
+  dragRoomId: string | null;
   onSelectRoom: (id: string | null) => void;
-  onRoomDrag: (roomId: string, floorId: string, dx: number, dz: number) => void;
-  onRoomDragStart: () => void;
-  onRoomDragEnd: () => void;
-  onRoomResize: (roomId: string, floorId: string, edge: string, delta: number) => void;
+  onRoomMoveTo: (x: number, z: number) => void;
+  onDragStart: (roomId: string, floorId: string, offsetX: number, offsetZ: number) => void;
+  onDragEnd: () => void;
 }) {
   const controlsRef = useRef<any>(null);
   const EXPLODE_GAP = 1.5;
@@ -447,16 +389,21 @@ function Scene({
   const centerY = totalHeight / 2;
   const centerZ = building.depth / 2;
 
-  // Disable orbit controls while dragging
-  const handleDragStart = useCallback(() => {
-    if (controlsRef.current) controlsRef.current.enabled = false;
-    onRoomDragStart();
-  }, [onRoomDragStart]);
+  // Disable orbit while dragging
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.enabled = !dragRoomId;
+    }
+  }, [dragRoomId]);
 
-  const handleDragEnd = useCallback(() => {
-    if (controlsRef.current) controlsRef.current.enabled = true;
-    onRoomDragEnd();
-  }, [onRoomDragEnd]);
+  // Find floor Y for the drag plane
+  const dragFloorY = useMemo(() => {
+    if (!dragRoomId) return 0;
+    for (const { floor, y } of floorPositions) {
+      if (floor.rooms.some((r) => r.id === dragRoomId)) return y;
+    }
+    return 0;
+  }, [dragRoomId, floorPositions]);
 
   return (
     <>
@@ -466,51 +413,37 @@ function Scene({
 
       {/* Ground — click to deselect */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.01, centerZ]} receiveShadow
-        onPointerDown={() => onSelectRoom(null)}>
+        onPointerDown={() => { if (!dragRoomId) onSelectRoom(null); }}>
         <planeGeometry args={[building.width + 12, building.depth + 12]} />
         <meshStandardMaterial color="#f1f5f9" opacity={0.5} transparent />
       </mesh>
 
-      <Grid
-        args={[40, 40]}
-        position={[centerX, 0, centerZ]}
-        cellSize={1}
-        cellThickness={0.5}
-        cellColor="#e2e8f0"
-        sectionSize={5}
-        sectionThickness={1}
-        sectionColor="#cbd5e1"
-        fadeDistance={40}
-        infiniteGrid={false}
+      {/* Drag plane — large invisible plane at floor height for smooth dragging */}
+      <DragPlane
+        active={!!dragRoomId}
+        floorY={dragFloorY}
+        onMove={(point) => onRoomMoveTo(point.x, point.z)}
+        onUp={onDragEnd}
       />
+
+      <Grid args={[40, 40]} position={[centerX, 0, centerZ]}
+        cellSize={1} cellThickness={0.5} cellColor="#e2e8f0"
+        sectionSize={5} sectionThickness={1} sectionColor="#cbd5e1"
+        fadeDistance={40} infiniteGrid={false} />
 
       <BuildingOutline width={building.width} depth={building.depth} />
 
-      {/* Building dimension lines */}
-      <DimensionLine
-        start={[0, 0, building.depth + 0.5]}
-        end={[building.width, 0, building.depth + 0.5]}
-        offset={[0, 0, 0]}
-        label={`${building.width.toFixed(2)} m`}
-      />
-      <DimensionLine
-        start={[building.width + 0.5, 0, 0]}
-        end={[building.width + 0.5, 0, building.depth]}
-        offset={[0, 0, 0]}
-        label={`${building.depth.toFixed(2)} m`}
-      />
+      <DimensionLine start={[0, 0, building.depth + 0.5]} end={[building.width, 0, building.depth + 0.5]} offset={[0, 0, 0]} label={`${building.width.toFixed(2)} m`} />
+      <DimensionLine start={[building.width + 0.5, 0, 0]} end={[building.width + 0.5, 0, building.depth]} offset={[0, 0, 0]} label={`${building.depth.toFixed(2)} m`} />
 
-      {/* Floors and rooms */}
       {floorPositions.map(({ floor, y, index }) => {
         const isActive = !activeFloorId || activeFloorId === floor.id;
         const isGhost = activeFloorId && activeFloorId !== floor.id;
 
         return (
           <group key={floor.id}>
-            {/* Slab: always show but ghost if not active */}
             <FloorSlab width={building.width} depth={building.depth} y={y} floorIndex={index} />
 
-            {/* Rooms: only show for active floor */}
             {isActive && floor.rooms.map((room) => (
               <Room3D
                 key={room.id}
@@ -518,15 +451,18 @@ function Scene({
                 floorY={y}
                 ceilingHeight={floor.ceilingHeight}
                 selected={selectedRoom === room.id}
-                onSelect={() => onSelectRoom(room.id)}
-                onDrag={(dx, dz) => onRoomDrag(room.id, floor.id, dx, dz)}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                onResize={(edge, delta) => onRoomResize(room.id, floor.id, edge, delta)}
+                isDragging={dragRoomId === room.id}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  onSelectRoom(room.id);
+                  // Offset = click point relative to room origin
+                  const offsetX = e.point.x - room.x;
+                  const offsetZ = e.point.z - room.z;
+                  onDragStart(room.id, floor.id, offsetX, offsetZ);
+                }}
               />
             ))}
 
-            {/* Ghost outline for inactive floors */}
             {isGhost && (
               <mesh position={[building.width / 2, y + floor.ceilingHeight / 2, building.depth / 2]}>
                 <boxGeometry args={[building.width, floor.ceilingHeight * 0.9, building.depth]} />
@@ -534,12 +470,9 @@ function Scene({
               </mesh>
             )}
 
-            {/* Floor label */}
             <Text position={[-0.8, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.35} color={isActive ? "#1e3a5f" : "#94a3b8"} anchorX="right" anchorY="middle" fontWeight="bold">
               {floor.name}
             </Text>
-
-            {/* Floor height label */}
             {isActive && (
               <Text position={[building.width + 1.2, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.2} color="#dc2626" anchorX="left" anchorY="middle">
                 {floor.ceilingHeight.toFixed(2)} m
@@ -549,33 +482,18 @@ function Scene({
         );
       })}
 
-      {/* Snap guides */}
       {snapGuides && (
-        <SnapGuides
-          guidesX={snapGuides.x}
-          guidesZ={snapGuides.z}
-          buildingWidth={building.width}
-          buildingDepth={building.depth}
-          floorY={snapGuides.floorY}
-          height={snapGuides.height}
-        />
+        <SnapGuides guidesX={snapGuides.x} guidesZ={snapGuides.z}
+          buildingWidth={building.width} buildingDepth={building.depth}
+          floorY={snapGuides.floorY} height={snapGuides.height} />
       )}
 
-      {/* Roofs: only show when viewing all floors */}
-      {!activeFloorId && (
-        <Roofs segments={building.roofSegments} baseY={totalHeight} />
-      )}
+      {!activeFloorId && <Roofs segments={building.roofSegments} baseY={totalHeight} />}
 
-      <OrbitControls
-        ref={controlsRef}
-        target={[centerX, centerY, centerZ]}
-        maxPolarAngle={Math.PI * 0.85}
-        minDistance={3}
-        maxDistance={60}
-        enableDamping
-        dampingFactor={0.05}
-        mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
-      />
+      <OrbitControls ref={controlsRef} target={[centerX, centerY, centerZ]}
+        maxPolarAngle={Math.PI * 0.85} minDistance={3} maxDistance={60}
+        enableDamping dampingFactor={0.05}
+        mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }} />
     </>
   );
 }
@@ -922,6 +840,10 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
   const [snapGuides, setSnapGuides] = useState<{ x: number[]; z: number[]; floorY: number; height: number } | null>(null);
   const { current: historyBuilding, push: pushHistory, undo, redo, canUndo, canRedo } = useHistory(building);
 
+  // Drag state: track which room is being dragged, offset from click to room origin
+  const [dragRoomId, setDragRoomId] = useState<string | null>(null);
+  const dragInfo = useRef<{ floorId: string; offsetX: number; offsetZ: number } | null>(null);
+
   // Sync external changes
   useEffect(() => {
     if (building !== historyBuilding) {
@@ -934,22 +856,28 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
     onChange(b);
   }, [pushHistory, onChange]);
 
-  // Accumulate drag deltas, apply snapping
-  const dragAccum = useRef({ x: 0, z: 0 });
+  // Called when user clicks a room
+  const handleDragStart = useCallback(
+    (roomId: string, floorId: string, offsetX: number, offsetZ: number) => {
+      setDragRoomId(roomId);
+      dragInfo.current = { floorId, offsetX, offsetZ };
+    },
+    []
+  );
 
-  const handleRoomDragStart = useCallback(() => {
-    dragAccum.current = { x: 0, z: 0 };
-  }, []);
-
-  const handleRoomDrag = useCallback(
-    (roomId: string, floorId: string, dx: number, dz: number) => {
+  // Called continuously as mouse moves over the drag plane
+  const handleRoomMoveTo = useCallback(
+    (worldX: number, worldZ: number) => {
+      if (!dragInfo.current || !dragRoomId) return;
+      const { floorId, offsetX, offsetZ } = dragInfo.current;
       const floor = building.floors.find((f) => f.id === floorId);
-      const room = floor?.rooms.find((r) => r.id === roomId);
+      const room = floor?.rooms.find((r) => r.id === dragRoomId);
       if (!room || !floor) return;
 
-      const otherRooms = floor.rooms.filter((r) => r.id !== roomId);
-      const rawX = room.x + dx;
-      const rawZ = room.z + dz;
+      const rawX = worldX - offsetX;
+      const rawZ = worldZ - offsetZ;
+
+      const otherRooms = floor.rooms.filter((r) => r.id !== dragRoomId);
       const snapped = snapWithGuides(rawX, rawZ, room.width, room.depth, building.width, building.depth, otherRooms);
 
       setSnapGuides({
@@ -959,7 +887,6 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
         height: floor.ceilingHeight,
       });
 
-      // Clamp within building
       const clampedX = Math.max(0, Math.min(snapped.x, building.width - room.width));
       const clampedZ = Math.max(0, Math.min(snapped.z, building.depth - room.depth));
 
@@ -967,51 +894,20 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
         ...building,
         floors: building.floors.map((f) =>
           f.id === floorId
-            ? { ...f, rooms: f.rooms.map((r) => (r.id === roomId ? { ...r, x: clampedX, z: clampedZ } : r)) }
+            ? { ...f, rooms: f.rooms.map((r) => (r.id === dragRoomId ? { ...r, x: clampedX, z: clampedZ } : r)) }
             : f
         ),
       });
     },
-    [building, onChange]
+    [building, onChange, dragRoomId]
   );
 
-  const handleRoomDragEnd = useCallback(() => {
+  const handleDragEnd = useCallback(() => {
+    setDragRoomId(null);
+    dragInfo.current = null;
     setSnapGuides(null);
     pushHistory(building);
   }, [building, pushHistory]);
-
-  const handleRoomResize = useCallback(
-    (roomId: string, floorId: string, edge: string, delta: number) => {
-      onChange({
-        ...building,
-        floors: building.floors.map((f) =>
-          f.id === floorId
-            ? {
-                ...f,
-                rooms: f.rooms.map((r) => {
-                  if (r.id !== roomId) return r;
-                  const updated = { ...r };
-                  if (edge === "right") updated.width = Math.max(0.5, snapValue(r.width + delta));
-                  if (edge === "left") {
-                    const newW = Math.max(0.5, snapValue(r.width - delta));
-                    updated.x = snapValue(r.x + (r.width - newW));
-                    updated.width = newW;
-                  }
-                  if (edge === "front") updated.depth = Math.max(0.5, snapValue(r.depth + delta));
-                  if (edge === "back") {
-                    const newD = Math.max(0.5, snapValue(r.depth - delta));
-                    updated.z = snapValue(r.z + (r.depth - newD));
-                    updated.depth = newD;
-                  }
-                  return updated;
-                }),
-              }
-            : f
-        ),
-      });
-    },
-    [building, onChange]
-  );
 
   const handleDuplicateRoom = useCallback(
     (roomId: string, floorId: string) => {
@@ -1118,11 +1014,11 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
             exploded={exploded}
             activeFloorId={activeFloorId}
             snapGuides={snapGuides}
+            dragRoomId={dragRoomId}
             onSelectRoom={setSelectedRoom}
-            onRoomDrag={handleRoomDrag}
-            onRoomDragStart={handleRoomDragStart}
-            onRoomDragEnd={handleRoomDragEnd}
-            onRoomResize={handleRoomResize}
+            onRoomMoveTo={handleRoomMoveTo}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
           />
         </Canvas>
 
