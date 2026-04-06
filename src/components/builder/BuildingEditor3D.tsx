@@ -376,6 +376,7 @@ function Scene({
   building,
   selectedRoom,
   exploded,
+  activeFloorId,
   snapGuides,
   onSelectRoom,
   onRoomDrag,
@@ -386,6 +387,7 @@ function Scene({
   building: BuildingData;
   selectedRoom: string | null;
   exploded: boolean;
+  activeFloorId: string | null; // null = alle Stockwerke
   snapGuides: { x: number[]; z: number[]; floorY: number; height: number } | null;
   onSelectRoom: (id: string | null) => void;
   onRoomDrag: (roomId: string, floorId: string, dx: number, dz: number) => void;
@@ -467,35 +469,53 @@ function Scene({
       />
 
       {/* Floors and rooms */}
-      {floorPositions.map(({ floor, y, index }) => (
-        <group key={floor.id}>
-          <FloorSlab width={building.width} depth={building.depth} y={y} floorIndex={index} />
-          {floor.rooms.map((room) => (
-            <Room3D
-              key={room.id}
-              room={room}
-              floorY={y}
-              ceilingHeight={floor.ceilingHeight}
-              selected={selectedRoom === room.id}
-              onSelect={() => onSelectRoom(room.id)}
-              onDrag={(dx, dz) => onRoomDrag(room.id, floor.id, dx, dz)}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onResize={(edge, delta) => onRoomResize(room.id, floor.id, edge, delta)}
-            />
-          ))}
+      {floorPositions.map(({ floor, y, index }) => {
+        const isActive = !activeFloorId || activeFloorId === floor.id;
+        const isGhost = activeFloorId && activeFloorId !== floor.id;
 
-          {/* Floor label */}
-          <Text position={[-0.8, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.35} color="#1e3a5f" anchorX="right" anchorY="middle" fontWeight="bold">
-            {floor.name}
-          </Text>
+        return (
+          <group key={floor.id}>
+            {/* Slab: always show but ghost if not active */}
+            <FloorSlab width={building.width} depth={building.depth} y={y} floorIndex={index} />
 
-          {/* Floor height label */}
-          <Text position={[building.width + 1.2, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.2} color="#dc2626" anchorX="left" anchorY="middle">
-            {floor.ceilingHeight.toFixed(2)} m
-          </Text>
-        </group>
-      ))}
+            {/* Rooms: only show for active floor */}
+            {isActive && floor.rooms.map((room) => (
+              <Room3D
+                key={room.id}
+                room={room}
+                floorY={y}
+                ceilingHeight={floor.ceilingHeight}
+                selected={selectedRoom === room.id}
+                onSelect={() => onSelectRoom(room.id)}
+                onDrag={(dx, dz) => onRoomDrag(room.id, floor.id, dx, dz)}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                onResize={(edge, delta) => onRoomResize(room.id, floor.id, edge, delta)}
+              />
+            ))}
+
+            {/* Ghost outline for inactive floors */}
+            {isGhost && (
+              <mesh position={[building.width / 2, y + floor.ceilingHeight / 2, building.depth / 2]}>
+                <boxGeometry args={[building.width, floor.ceilingHeight * 0.9, building.depth]} />
+                <meshStandardMaterial color="#94a3b8" opacity={0.08} transparent side={THREE.DoubleSide} />
+              </mesh>
+            )}
+
+            {/* Floor label */}
+            <Text position={[-0.8, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.35} color={isActive ? "#1e3a5f" : "#94a3b8"} anchorX="right" anchorY="middle" fontWeight="bold">
+              {floor.name}
+            </Text>
+
+            {/* Floor height label */}
+            {isActive && (
+              <Text position={[building.width + 1.2, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.2} color="#dc2626" anchorX="left" anchorY="middle">
+                {floor.ceilingHeight.toFixed(2)} m
+              </Text>
+            )}
+          </group>
+        );
+      })}
 
       {/* Snap guides */}
       {snapGuides && (
@@ -509,8 +529,10 @@ function Scene({
         />
       )}
 
-      {/* Roof */}
-      <Roof width={building.width} depth={building.depth} baseY={totalHeight - (exploded ? EXPLODE_GAP * (sortedFloors.length - 1) : 0) + (exploded ? EXPLODE_GAP * sortedFloors.length : 0)} roofType={building.roofType} pitch={building.roofPitchDegrees} />
+      {/* Roof: only show when viewing all floors */}
+      {!activeFloorId && (
+        <Roof width={building.width} depth={building.depth} baseY={totalHeight - (exploded ? EXPLODE_GAP * (sortedFloors.length - 1) : 0) + (exploded ? EXPLODE_GAP * sortedFloors.length : 0)} roofType={building.roofType} pitch={building.roofPitchDegrees} />
+      )}
 
       <OrbitControls
         ref={controlsRef}
@@ -530,14 +552,18 @@ function Scene({
 function SidePanel({
   building,
   selectedRoom,
+  activeFloorId,
   onChange,
   onSelectRoom,
+  onSetActiveFloor,
   onDuplicateRoom,
 }: {
   building: BuildingData;
   selectedRoom: string | null;
+  activeFloorId: string | null;
   onChange: (b: BuildingData) => void;
   onSelectRoom: (id: string | null) => void;
+  onSetActiveFloor: (id: string | null) => void;
   onDuplicateRoom: (roomId: string, floorId: string) => void;
 }) {
   let selectedRoomData: RoomData | null = null;
@@ -641,9 +667,32 @@ function SidePanel({
         </div>
       </div>
 
+      {/* Floor tabs */}
+      <div className="flex border-b overflow-x-auto">
+        <button
+          onClick={() => onSetActiveFloor(null)}
+          className={`flex-shrink-0 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+            !activeFloorId ? "border-blue-500 text-blue-700 bg-blue-50" : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Alle
+        </button>
+        {sortedFloors.map((floor) => (
+          <button
+            key={floor.id}
+            onClick={() => onSetActiveFloor(floor.id)}
+            className={`flex-shrink-0 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+              activeFloorId === floor.id ? "border-blue-500 text-blue-700 bg-blue-50" : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {floor.name}
+          </button>
+        ))}
+      </div>
+
       {/* Floors */}
       <div className="flex-1 overflow-y-auto">
-        {sortedFloors.map((floor) => (
+        {sortedFloors.filter((f) => !activeFloorId || f.id === activeFloorId).map((floor) => (
           <div key={floor.id} className="border-b">
             <div className="flex items-center justify-between p-3 bg-gray-50">
               <div className="flex-1 min-w-0">
@@ -782,6 +831,7 @@ function useHistory<T>(initial: T) {
 export default function BuildingEditor3D({ building, onChange }: BuildingEditor3DProps) {
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [exploded, setExploded] = useState(false);
+  const [activeFloorId, setActiveFloorId] = useState<string | null>(null);
   const [snapGuides, setSnapGuides] = useState<{ x: number[]; z: number[]; floorY: number; height: number } | null>(null);
   const { current: historyBuilding, push: pushHistory, undo, redo, canUndo, canRedo } = useHistory(building);
 
@@ -979,6 +1029,7 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
             building={building}
             selectedRoom={selectedRoom}
             exploded={exploded}
+            activeFloorId={activeFloorId}
             snapGuides={snapGuides}
             onSelectRoom={setSelectedRoom}
             onRoomDrag={handleRoomDrag}
@@ -1017,8 +1068,10 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
       <SidePanel
         building={building}
         selectedRoom={selectedRoom}
+        activeFloorId={activeFloorId}
         onChange={updateBuilding}
         onSelectRoom={setSelectedRoom}
+        onSetActiveFloor={setActiveFloorId}
         onDuplicateRoom={handleDuplicateRoom}
       />
     </div>
