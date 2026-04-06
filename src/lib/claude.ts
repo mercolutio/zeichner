@@ -125,19 +125,19 @@ WICHTIG:
       let responseText: string;
 
       if (attempt === 0) {
-        // First attempt: use extended thinking for best quality
+        // First attempt: low temperature for consistency
         const stream = await client.messages.stream({
           model: "claude-opus-4-20250514",
-          max_tokens: 32768,
-          thinking: {
-            type: "enabled",
-            budget_tokens: 10000,
-          },
+          max_tokens: 16384,
+          temperature: 0.2,
           system: ANALYSIS_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: baseContent }],
+          messages: [
+            { role: "user", content: baseContent },
+            { role: "assistant", content: [{ type: "text", text: "{" }] },
+          ],
         });
         const response = await stream.finalMessage();
-        responseText = getResponseText(response.content);
+        responseText = "{" + getResponseText(response.content);
       } else {
         // Retry: no thinking (faster), lower temperature, prefill with {
         const retryMessage =
