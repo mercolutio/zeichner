@@ -211,18 +211,28 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
 
       {/* Roof segments */}
       {building.roofSegments.map((seg, i) => {
-        // rotation 0 = ridge along X (east-west). The gable face is perpendicular to the ridge.
-        // Querschnitt (width) looks from south → sees gable when ridge is perpendicular to view = along Z (rot ~90°)
-        // Längsschnitt (depth) looks from west → sees gable when ridge is along X (rot ~0°)
+        // In 3D: rotation 0 = gable profile along X (width), extruded along Z (depth), ridge runs Z.
+        // So looking from south (Querschnitt/width): we see the GABLE at rotation 0.
+        // Looking from west (Längsschnitt/depth): we see the SIDE at rotation 0.
+        // At rotation 90: the gable rotates to face west, so Längsschnitt sees gable.
         const rotNorm = ((seg.rotation % 360) + 360) % 360;
         const isGableView = direction === "width"
-          ? (rotNorm > 45 && rotNorm < 135) || (rotNorm > 225 && rotNorm < 315)  // Ridge ~N-S → gable in width section
-          : rotNorm <= 45 || rotNorm >= 315 || (rotNorm > 135 && rotNorm < 225);  // Ridge ~O-W → gable in depth section
+          ? rotNorm <= 45 || rotNorm >= 315 || (rotNorm > 135 && rotNorm < 225)  // rot ~0° or ~180° → gable in width section
+          : (rotNorm > 45 && rotNorm < 135) || (rotNorm > 225 && rotNorm < 315);  // rot ~90° or ~270° → gable in depth section
 
-        // The span this roof covers along the section axis (accounting for rotation)
-        // For simple cases: use the larger dimension when looking at gable, smaller for side
-        const segX = direction === "width" ? seg.x : seg.z;
-        const segW = direction === "width" ? seg.width : seg.depth;
+        // Compute the bounding box of the rotated roof in world space
+        const cx = seg.x + seg.width / 2;
+        const cz = seg.z + seg.depth / 2;
+        const hw = seg.width / 2;
+        const hd = seg.depth / 2;
+        const cosR = Math.abs(Math.cos(rotNorm * Math.PI / 180));
+        const sinR = Math.abs(Math.sin(rotNorm * Math.PI / 180));
+        // Rotated bounding box half-extents
+        const bbHalfW = hw * cosR + hd * sinR;
+        const bbHalfD = hw * sinR + hd * cosR;
+
+        const segX = direction === "width" ? cx - bbHalfW : cz - bbHalfD;
+        const segW = direction === "width" ? bbHalfW * 2 : bbHalfD * 2;
 
         const peakH = calcRoofHeight(seg);
 
