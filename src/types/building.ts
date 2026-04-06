@@ -35,6 +35,8 @@ export interface FloorData {
   ceilingHeight: number; // Meter
   width: number;         // Stockwerk-Breite (X)
   depth: number;         // Stockwerk-Tiefe (Z)
+  x: number;             // Offset vom Gebäude-Nullpunkt (X)
+  z: number;             // Offset vom Gebäude-Nullpunkt (Z)
   rooms: RoomData[];
 }
 
@@ -60,14 +62,24 @@ export interface BuildingData {
   roofPitchDegrees: number;
 }
 
-/** Max width across all floors */
+/** Total width across all floors (considering offsets) */
 export function buildingWidth(b: BuildingData): number {
-  return Math.max(1, ...b.floors.map((f) => f.width));
+  return Math.max(1, ...b.floors.map((f) => (f.x || 0) + f.width));
 }
 
-/** Max depth across all floors */
+/** Total depth across all floors (considering offsets) */
 export function buildingDepth(b: BuildingData): number {
-  return Math.max(1, ...b.floors.map((f) => f.depth));
+  return Math.max(1, ...b.floors.map((f) => (f.z || 0) + f.depth));
+}
+
+/** Min X offset across all floors */
+export function buildingMinX(b: BuildingData): number {
+  return Math.min(0, ...b.floors.map((f) => f.x || 0));
+}
+
+/** Min Z offset across all floors */
+export function buildingMinZ(b: BuildingData): number {
+  return Math.min(0, ...b.floors.map((f) => f.z || 0));
 }
 
 export function createRoom(partial?: Partial<RoomData>): RoomData {
@@ -93,6 +105,8 @@ export function createFloor(partial?: Partial<FloorData>): FloorData {
     ceilingHeight: 2.5,
     width: 10,
     depth: 8,
+    x: 0,
+    z: 0,
     rooms: [],
     ...partial,
   };

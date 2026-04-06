@@ -46,8 +46,10 @@ function loadBuilding(): BuildingData {
         localStorage.removeItem(STORAGE_KEY);
         return createBuilding();
       }
-      // Ensure all rooms have isVoid
+      // Migrate missing fields
       for (const floor of data.floors) {
+        if (typeof floor.x !== "number") floor.x = 0;
+        if (typeof floor.z !== "number") floor.z = 0;
         for (const room of floor.rooms) {
           if (typeof room.isVoid !== "boolean") room.isVoid = false;
         }

@@ -499,9 +499,11 @@ function Scene({
       {floorPositions.map(({ floor, y, index }) => {
         const isActive = !activeFloorId || activeFloorId === floor.id;
         const isGhost = activeFloorId && activeFloorId !== floor.id;
+        const fx = floor.x || 0;
+        const fz = floor.z || 0;
 
         return (
-          <group key={floor.id}>
+          <group key={floor.id} position={[fx, 0, fz]}>
             <FloorSlab width={floor.width} depth={floor.depth} y={y} floorIndex={index} />
 
             {isActive && floor.rooms.map((room) => (
@@ -516,9 +518,8 @@ function Scene({
                 onPointerDown={(e) => {
                   e.stopPropagation();
                   onSelectRoom(room.id);
-                  // Offset = click point relative to room origin
-                  const offsetX = e.point.x - room.x;
-                  const offsetZ = e.point.z - room.z;
+                  const offsetX = e.point.x - room.x - fx;
+                  const offsetZ = e.point.z - room.z - fz;
                   onDragStart(room.id, floor.id, offsetX, offsetZ);
                 }}
               />
@@ -531,11 +532,11 @@ function Scene({
               </mesh>
             )}
 
-            <Text position={[-0.8, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.35} color={isActive ? "#1e3a5f" : "#94a3b8"} anchorX="right" anchorY="middle" fontWeight="bold">
+            <Text position={[-0.8, y + floor.ceilingHeight / 2, centerZ - fz]} fontSize={0.35} color={isActive ? "#1e3a5f" : "#94a3b8"} anchorX="right" anchorY="middle" fontWeight="bold">
               {floor.name}
             </Text>
             {isActive && (
-              <Text position={[bWidth + 1.2, y + floor.ceilingHeight / 2, centerZ]} fontSize={0.2} color="#dc2626" anchorX="left" anchorY="middle">
+              <Text position={[bWidth - fx + 1.2, y + floor.ceilingHeight / 2, centerZ - fz]} fontSize={0.2} color="#dc2626" anchorX="left" anchorY="middle">
                 {floor.ceilingHeight.toFixed(2)} m
               </Text>
             )}
@@ -790,7 +791,15 @@ function SidePanel({
                   <input type="number" step="0.1" min="1" value={floor.depth}
                     onChange={(e) => updateFloor(floor.id, { depth: +e.target.value || 1 })}
                     className="w-12 border rounded px-1 py-0.5 text-right bg-white" />
-                  <span>{floor.rooms.length} Räume · {floor.rooms.reduce((s, r) => s + roomArea(r), 0).toFixed(1)} m²</span>
+                  <span>X:</span>
+                  <input type="number" step="0.1" value={floor.x || 0}
+                    onChange={(e) => updateFloor(floor.id, { x: +e.target.value })}
+                    className="w-12 border rounded px-1 py-0.5 text-right bg-white" title="X-Offset" />
+                  <span>Z:</span>
+                  <input type="number" step="0.1" value={floor.z || 0}
+                    onChange={(e) => updateFloor(floor.id, { z: +e.target.value })}
+                    className="w-12 border rounded px-1 py-0.5 text-right bg-white" title="Z-Offset" />
+                  <span>{floor.rooms.length} R · {floor.rooms.reduce((s, r) => s + roomArea(r), 0).toFixed(1)} m²</span>
                 </div>
               </div>
               <div className="flex gap-1 ml-2 shrink-0">
@@ -986,13 +995,16 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
         return;
       }
 
-      // Dragging a room
+      // Dragging a room — subtract floor offset since rooms are relative to floor
       const floor = building.floors.find((f) => f.id === floorId);
       const room = floor?.rooms.find((r) => r.id === dragRoomId);
       if (!room || !floor) return;
 
+      const floorRelX = rawX - (floor.x || 0);
+      const floorRelZ = rawZ - (floor.z || 0);
+
       const otherRooms = floor.rooms.filter((r) => r.id !== dragRoomId);
-      const snapped = snapWithGuides(rawX, rawZ, room.width, room.depth, floor.width, floor.depth, otherRooms);
+      const snapped = snapWithGuides(floorRelX, floorRelZ, room.width, room.depth, floor.width, floor.depth, otherRooms);
 
       setSnapGuides({
         x: snapped.guidesX,
