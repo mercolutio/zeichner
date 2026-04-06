@@ -1,38 +1,79 @@
 "use client";
 
 import React from "react";
-import { BuildingData, FloorData, RoomData, roomArea, floorArea } from "@/types/building";
+import { BuildingData, FloorData, RoomData, roomArea } from "@/types/building";
 
-const CATEGORY_COLORS: Record<string, { fill: string; stroke: string }> = {
-  wohnraum: { fill: "#dbeafe", stroke: "#3b82f6" },
-  nutzraum: { fill: "#f3f4f6", stroke: "#6b7280" },
-  balkon: { fill: "#d1fae5", stroke: "#10b981" },
-  terrasse: { fill: "#d1fae5", stroke: "#10b981" },
-  loggia: { fill: "#e0e7ff", stroke: "#6366f1" },
-  keller: { fill: "#f5f0eb", stroke: "#a3896b" },
-  garage: { fill: "#f3f4f6", stroke: "#9ca3af" },
+const WALL_OUTER = 3;   // px — outer wall thickness
+const WALL_INNER = 1.5;  // px — inner wall thickness
+
+const CATEGORY_FILLS: Record<string, string> = {
+  wohnraum: "#f8fafc",
+  nutzraum: "#f8fafc",
+  balkon: "#f0fdf4",
+  terrasse: "#f0fdf4",
+  loggia: "#eef2ff",
+  keller: "#faf5f0",
+  garage: "#f9fafb",
 };
 
-function FloorPlan({ floor, maxWidth }: { floor: FloorData; maxWidth: number }) {
-  const padding = 60;
-  const svgW = maxWidth;
-  const svgH = 400;
+function FloorPlan({ floor }: { floor: FloorData }) {
+  const rooms = floor.rooms.filter((r) => !r.isVoid);
+  if (rooms.length === 0) return null;
+
+  // Compute bounding box from rooms
+  const minX = Math.min(...rooms.map((r) => r.x));
+  const minZ = Math.min(...rooms.map((r) => r.z));
+  const maxX = Math.max(...rooms.map((r) => r.x + r.width));
+  const maxZ = Math.max(...rooms.map((r) => r.z + r.depth));
+  const totalW = maxX - minX;
+  const totalD = maxZ - minZ;
+
+  if (totalW <= 0 || totalD <= 0) return null;
+
+  const padding = 70;
+  const svgW = 750;
+  const svgH = Math.max(250, Math.min(500, 250 + totalD / totalW * 400));
 
   const drawW = svgW - padding * 2;
   const drawH = svgH - padding * 2;
+  const scale = Math.min(drawW / totalW, drawH / totalD);
 
-  const scaleX = drawW / (floor.width || 1);
-  const scaleY = drawH / (floor.depth || 1);
-  const scale = Math.min(scaleX, scaleY);
+  const offsetX = padding + (drawW - totalW * scale) / 2;
+  const offsetY = padding + (drawH - totalD * scale) / 2;
 
-  const offsetX = padding + (drawW - floor.width * scale) / 2;
-  const offsetY = padding + (drawH - floor.depth * scale) / 2;
+  const toX = (m: number) => offsetX + (m - minX) * scale;
+  const toY = (m: number) => offsetY + (m - minZ) * scale;
 
-  const toX = (m: number) => offsetX + m * scale;
-  const toY = (m: number) => offsetY + m * scale;
+  // Detect edges: for each room edge, check if it's an outer wall or shared with another room
+  function isOuterEdge(room: RoomData, edge: "top" | "bottom" | "left" | "right"): boolean {
+    const EPS = 0.05;
+    for (const other of rooms) {
+      if (other.id === room.id) continue;
+      if (edge === "top" && Math.abs(other.z + other.depth - room.z) < EPS &&
+          other.x < room.x + room.width - EPS && other.x + other.width > room.x + EPS) return false;
+      if (edge === "bottom" && Math.abs(other.z - (room.z + room.depth)) < EPS &&
+          other.x < room.x + room.width - EPS && other.x + other.width > room.x + EPS) return false;
+      if (edge === "left" && Math.abs(other.x + other.width - room.x) < EPS &&
+          other.z < room.z + room.depth - EPS && other.z + other.depth > room.z + EPS) return false;
+      if (edge === "right" && Math.abs(other.x - (room.x + room.width)) < EPS &&
+          other.z < room.z + room.depth - EPS && other.z + other.depth > room.z + EPS) return false;
+    }
+    return true;
+  }
 
-  const solidRooms = floor.rooms.filter((r) => !r.isVoid);
-  const voidRooms = floor.rooms.filter((r) => r.isVoid);
+  const totalArea = rooms.reduce((s, r) => s + roomArea(r), 0);
+
+  // Dimension lines along the top
+  const sortedByX = [...rooms].sort((a, b) => a.x - b.x);
+  const topDims: { x1: number; x2: number; label: string }[] = [];
+  // Collect unique X breakpoints
+  const xBreaks = [...new Set(rooms.flatMap((r) => [r.x, r.x + r.width]))].sort((a, b) => a - b);
+  for (let i = 0; i < xBreaks.length - 1; i++) {
+    const w = xBreaks[i + 1] - xBreaks[i];
+    if (w > 0.1) {
+      topDims.push({ x1: xBreaks[i], x2: xBreaks[i + 1], label: w.toFixed(2) });
+    }
+  }
 
   return (
     <div className="bg-white rounded-xl border shadow-sm p-5">
@@ -40,142 +81,143 @@ function FloorPlan({ floor, maxWidth }: { floor: FloorData; maxWidth: number }) 
         <div>
           <h3 className="font-semibold text-gray-800">{floor.name}</h3>
           <p className="text-xs text-gray-500">
-            {floor.width.toFixed(2)} × {floor.depth.toFixed(2)} m · Raumhöhe {floor.ceilingHeight.toFixed(2)} m · {solidRooms.reduce((s, r) => s + roomArea(r), 0).toFixed(1)} m²
+            {totalW.toFixed(2)} × {totalD.toFixed(2)} m · Raumhöhe {floor.ceilingHeight.toFixed(2)} m · {totalArea.toFixed(1)} m²
           </p>
         </div>
         <span className="text-sm font-mono text-gray-400">Ebene {floor.level}</span>
       </div>
 
-      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: "400px" }}>
-        {/* 1. Rooms first (colored fills) */}
-        {solidRooms.map((room) => {
-          const colors = CATEGORY_COLORS[room.category] || CATEGORY_COLORS.wohnraum;
+      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full">
+        {/* Room fills */}
+        {rooms.map((room) => (
+          <rect key={`fill-${room.id}`}
+            x={toX(room.x)} y={toY(room.z)}
+            width={room.width * scale} height={room.depth * scale}
+            fill={CATEGORY_FILLS[room.category] || "#f8fafc"}
+          />
+        ))}
+
+        {/* Room walls */}
+        {rooms.map((room) => {
           const rx = toX(room.x);
           const ry = toY(room.z);
           const rw = room.width * scale;
           const rh = room.depth * scale;
 
+          const topOuter = isOuterEdge(room, "top");
+          const bottomOuter = isOuterEdge(room, "bottom");
+          const leftOuter = isOuterEdge(room, "left");
+          const rightOuter = isOuterEdge(room, "right");
+
           return (
-            <g key={room.id}>
-              <rect
-                x={rx} y={ry}
-                width={rw} height={rh}
-                fill={colors.fill} stroke={colors.stroke} strokeWidth={1.5}
-              />
+            <g key={`walls-${room.id}`}>
+              {/* Top wall */}
+              <line x1={rx} y1={ry} x2={rx + rw} y2={ry}
+                stroke="#1e293b" strokeWidth={topOuter ? WALL_OUTER : WALL_INNER} />
+              {/* Bottom wall */}
+              <line x1={rx} y1={ry + rh} x2={rx + rw} y2={ry + rh}
+                stroke="#1e293b" strokeWidth={bottomOuter ? WALL_OUTER : WALL_INNER} />
+              {/* Left wall */}
+              <line x1={rx} y1={ry} x2={rx} y2={ry + rh}
+                stroke="#1e293b" strokeWidth={leftOuter ? WALL_OUTER : WALL_INNER} />
+              {/* Right wall */}
+              <line x1={rx + rw} y1={ry} x2={rx + rw} y2={ry + rh}
+                stroke="#1e293b" strokeWidth={rightOuter ? WALL_OUTER : WALL_INNER} />
+            </g>
+          );
+        })}
+
+        {/* Room labels */}
+        {rooms.map((room) => {
+          const rx = toX(room.x);
+          const ry = toY(room.z);
+          const rw = room.width * scale;
+          const rh = room.depth * scale;
+          const fs = Math.min(11, rw / 7, rh / 4);
+          if (rw < 25 || rh < 20 || fs < 5) return null;
+
+          return (
+            <g key={`label-${room.id}`}>
               {/* Room name */}
-              {rw > 30 && rh > 20 && (
-                <text
-                  x={rx + rw / 2} y={ry + rh / 2 - 6}
+              <text x={rx + rw / 2} y={ry + rh / 2 - fs * 0.7}
+                textAnchor="middle" dominantBaseline="middle"
+                fontSize={fs} fill="#1e293b" fontWeight={500}
+                fontFamily="Helvetica, Arial, sans-serif">
+                {room.name}
+              </text>
+              {/* Area + dimensions */}
+              {rw > 40 && rh > 35 && (
+                <text x={rx + rw / 2} y={ry + rh / 2 + fs * 0.5}
                   textAnchor="middle" dominantBaseline="middle"
-                  fontSize={Math.min(12, rw / 6)} fill="#1e293b"
-                  fontFamily="Helvetica, Arial, sans-serif" fontWeight={500}
-                >
-                  {room.name}
-                </text>
-              )}
-              {/* Dimensions */}
-              {rw > 40 && rh > 30 && (
-                <text
-                  x={rx + rw / 2} y={ry + rh / 2 + 8}
-                  textAnchor="middle" dominantBaseline="middle"
-                  fontSize={Math.min(9, rw / 8)} fill="#6b7280"
-                  fontFamily="Helvetica, Arial, sans-serif"
-                >
-                  {room.width.toFixed(2)} × {room.depth.toFixed(2)} m
-                </text>
-              )}
-              {/* Area */}
-              {rw > 40 && rh > 40 && (
-                <text
-                  x={rx + rw / 2} y={ry + rh / 2 + 20}
-                  textAnchor="middle" dominantBaseline="middle"
-                  fontSize={Math.min(9, rw / 8)} fill="#9ca3af"
-                  fontFamily="Helvetica, Arial, sans-serif"
-                >
-                  {roomArea(room).toFixed(1)} m²
+                  fontSize={fs * 0.75} fill="#6b7280"
+                  fontFamily="Helvetica, Arial, sans-serif">
+                  {roomArea(room).toFixed(2)} m² ({room.width.toFixed(2)} × {room.depth.toFixed(2)})
                 </text>
               )}
             </g>
           );
         })}
 
-        {/* 2. Void rooms — white rectangles to cut holes */}
-        {voidRooms.map((room) => (
-          <rect key={room.id}
-            x={toX(room.x)} y={toY(room.z)}
-            width={room.width * scale} height={room.depth * scale}
-            fill="white" stroke="none"
-          />
-        ))}
-
-        {/* 3. Building outline — only the outer walls that aren't voided */}
-        {/* Draw full outline, then void edges will be covered by the white rects above */}
-        <rect
-          x={toX(0)} y={toY(0)}
-          width={floor.width * scale} height={floor.depth * scale}
-          fill="none" stroke="#1e293b" strokeWidth={2}
-        />
-        {/* Re-draw void rects slightly larger to clean up outline edges in void areas */}
-        {voidRooms.map((room) => (
-          <rect key={`void-clean-${room.id}`}
-            x={toX(room.x) - 1} y={toY(room.z) - 1}
-            width={room.width * scale + 2} height={room.depth * scale + 2}
-            fill="white" stroke="none"
-          />
-        ))}
-        {/* Re-draw room strokes that were covered by void cleanup */}
-        {solidRooms.map((room) => {
-          const colors = CATEGORY_COLORS[room.category] || CATEGORY_COLORS.wohnraum;
+        {/* Top dimension chain */}
+        {topDims.map((d, i) => {
+          const y = toY(minZ) - 20;
+          const x1 = toX(d.x1);
+          const x2 = toX(d.x2);
+          if (x2 - x1 < 15) return null;
           return (
-            <rect key={`stroke-${room.id}`}
-              x={toX(room.x)} y={toY(room.z)}
-              width={room.width * scale} height={room.depth * scale}
-              fill="none" stroke={colors.stroke} strokeWidth={1.5}
-            />
-          );
-        })}
-
-        {/* Outer dimension lines */}
-        {/* Width */}
-        <line x1={toX(0)} y1={toY(floor.depth) + 25} x2={toX(floor.width)} y2={toY(floor.depth) + 25} stroke="#555" strokeWidth={0.5} />
-        <line x1={toX(0)} y1={toY(floor.depth) + 20} x2={toX(0)} y2={toY(floor.depth) + 30} stroke="#555" strokeWidth={0.5} />
-        <line x1={toX(floor.width)} y1={toY(floor.depth) + 20} x2={toX(floor.width)} y2={toY(floor.depth) + 30} stroke="#555" strokeWidth={0.5} />
-        <text
-          x={toX(floor.width / 2)} y={toY(floor.depth) + 38}
-          textAnchor="middle" fontSize={10} fill="#555"
-          fontFamily="Helvetica, Arial, sans-serif"
-        >
-          {floor.width.toFixed(2)} m
-        </text>
-
-        {/* Depth */}
-        <line x1={toX(floor.width) + 25} y1={toY(0)} x2={toX(floor.width) + 25} y2={toY(floor.depth)} stroke="#555" strokeWidth={0.5} />
-        <line x1={toX(floor.width) + 20} y1={toY(0)} x2={toX(floor.width) + 30} y2={toY(0)} stroke="#555" strokeWidth={0.5} />
-        <line x1={toX(floor.width) + 20} y1={toY(floor.depth)} x2={toX(floor.width) + 30} y2={toY(floor.depth)} stroke="#555" strokeWidth={0.5} />
-        <text
-          x={toX(floor.width) + 38} y={toY(floor.depth / 2)}
-          textAnchor="middle" fontSize={10} fill="#555"
-          fontFamily="Helvetica, Arial, sans-serif"
-          transform={`rotate(90, ${toX(floor.width) + 38}, ${toY(floor.depth / 2)})`}
-        >
-          {floor.depth.toFixed(2)} m
-        </text>
-
-        {/* Room dimension lines (width along bottom of each room) */}
-        {solidRooms.map((room) => {
-          const rx = toX(room.x);
-          const rw = room.width * scale;
-          const ry2 = toY(room.z + room.depth);
-          if (rw < 30) return null;
-          return (
-            <g key={`dim-${room.id}`}>
-              <line x1={rx} y1={ry2 - 2} x2={rx + rw} y2={ry2 - 2} stroke="#dc2626" strokeWidth={0.4} />
-              <text x={rx + rw / 2} y={ry2 - 5} textAnchor="middle" fontSize={7} fill="#dc2626" fontFamily="Helvetica, Arial, sans-serif">
-                {room.width.toFixed(2)}
+            <g key={`tdim-${i}`}>
+              <line x1={x1} y1={y} x2={x2} y2={y} stroke="#374151" strokeWidth={0.5} />
+              <line x1={x1} y1={y - 4} x2={x1} y2={y + 4} stroke="#374151" strokeWidth={0.5} />
+              <line x1={x2} y1={y - 4} x2={x2} y2={y + 4} stroke="#374151" strokeWidth={0.5} />
+              <text x={(x1 + x2) / 2} y={y - 6}
+                textAnchor="middle" fontSize={7} fill="#374151"
+                fontFamily="Helvetica, Arial, sans-serif">
+                {d.label}
               </text>
             </g>
           );
         })}
+
+        {/* Overall width dimension */}
+        <line x1={toX(minX)} y1={toY(maxZ) + 25} x2={toX(maxX)} y2={toY(maxZ) + 25} stroke="#374151" strokeWidth={0.5} />
+        <line x1={toX(minX)} y1={toY(maxZ) + 20} x2={toX(minX)} y2={toY(maxZ) + 30} stroke="#374151" strokeWidth={0.5} />
+        <line x1={toX(maxX)} y1={toY(maxZ) + 20} x2={toX(maxX)} y2={toY(maxZ) + 30} stroke="#374151" strokeWidth={0.5} />
+        <text x={(toX(minX) + toX(maxX)) / 2} y={toY(maxZ) + 40}
+          textAnchor="middle" fontSize={9} fill="#374151"
+          fontFamily="Helvetica, Arial, sans-serif">
+          {totalW.toFixed(2)} m
+        </text>
+
+        {/* Right side depth dimension */}
+        {(() => {
+          const zBreaks = [...new Set(rooms.flatMap((r) => [r.z, r.z + r.depth]))].sort((a, b) => a - b);
+          const x = toX(maxX) + 20;
+          return (
+            <g>
+              {zBreaks.map((z, i) => {
+                if (i >= zBreaks.length - 1) return null;
+                const d = zBreaks[i + 1] - zBreaks[i];
+                if (d < 0.1) return null;
+                const y1 = toY(zBreaks[i]);
+                const y2 = toY(zBreaks[i + 1]);
+                if (y2 - y1 < 15) return null;
+                return (
+                  <g key={`zdim-${i}`}>
+                    <line x1={x} y1={y1} x2={x} y2={y2} stroke="#374151" strokeWidth={0.5} />
+                    <line x1={x - 4} y1={y1} x2={x + 4} y2={y1} stroke="#374151" strokeWidth={0.5} />
+                    <line x1={x - 4} y1={y2} x2={x + 4} y2={y2} stroke="#374151" strokeWidth={0.5} />
+                    <text x={x + 8} y={(y1 + y2) / 2}
+                      textAnchor="start" dominantBaseline="middle"
+                      fontSize={7} fill="#374151"
+                      fontFamily="Helvetica, Arial, sans-serif">
+                      {d.toFixed(2)}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+          );
+        })()}
       </svg>
     </div>
   );
@@ -187,7 +229,7 @@ export default function FloorplanView({ building }: { building: BuildingData }) 
   return (
     <div className="space-y-6">
       {sortedFloors.map((floor) => (
-        <FloorPlan key={floor.id} floor={floor} maxWidth={700} />
+        <FloorPlan key={floor.id} floor={floor} />
       ))}
     </div>
   );
