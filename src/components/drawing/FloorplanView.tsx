@@ -40,30 +40,14 @@ function FloorPlan({ floor, maxWidth }: { floor: FloorData; maxWidth: number }) 
         <div>
           <h3 className="font-semibold text-gray-800">{floor.name}</h3>
           <p className="text-xs text-gray-500">
-            {floor.width.toFixed(2)} × {floor.depth.toFixed(2)} m · Raumhöhe {floor.ceilingHeight.toFixed(2)} m · {floorArea(floor).toFixed(1)} m²
+            {floor.width.toFixed(2)} × {floor.depth.toFixed(2)} m · Raumhöhe {floor.ceilingHeight.toFixed(2)} m · {solidRooms.reduce((s, r) => s + roomArea(r), 0).toFixed(1)} m²
           </p>
         </div>
         <span className="text-sm font-mono text-gray-400">Ebene {floor.level}</span>
       </div>
 
       <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full" style={{ maxHeight: "400px" }}>
-        {/* Building outline */}
-        <rect
-          x={toX(0)} y={toY(0)}
-          width={floor.width * scale} height={floor.depth * scale}
-          fill="none" stroke="#1e293b" strokeWidth={2}
-        />
-
-        {/* Void rooms — cut out from building outline (white fill to hide outline behind them) */}
-        {voidRooms.map((room) => (
-          <rect key={room.id}
-            x={toX(room.x)} y={toY(room.z)}
-            width={room.width * scale} height={room.depth * scale}
-            fill="white" stroke="none"
-          />
-        ))}
-
-        {/* Rooms */}
+        {/* 1. Rooms first (colored fills) */}
         {solidRooms.map((room) => {
           const colors = CATEGORY_COLORS[room.category] || CATEGORY_COLORS.wohnraum;
           const rx = toX(room.x);
@@ -112,6 +96,42 @@ function FloorPlan({ floor, maxWidth }: { floor: FloorData; maxWidth: number }) 
                 </text>
               )}
             </g>
+          );
+        })}
+
+        {/* 2. Void rooms — white rectangles to cut holes */}
+        {voidRooms.map((room) => (
+          <rect key={room.id}
+            x={toX(room.x)} y={toY(room.z)}
+            width={room.width * scale} height={room.depth * scale}
+            fill="white" stroke="none"
+          />
+        ))}
+
+        {/* 3. Building outline — only the outer walls that aren't voided */}
+        {/* Draw full outline, then void edges will be covered by the white rects above */}
+        <rect
+          x={toX(0)} y={toY(0)}
+          width={floor.width * scale} height={floor.depth * scale}
+          fill="none" stroke="#1e293b" strokeWidth={2}
+        />
+        {/* Re-draw void rects slightly larger to clean up outline edges in void areas */}
+        {voidRooms.map((room) => (
+          <rect key={`void-clean-${room.id}`}
+            x={toX(room.x) - 1} y={toY(room.z) - 1}
+            width={room.width * scale + 2} height={room.depth * scale + 2}
+            fill="white" stroke="none"
+          />
+        ))}
+        {/* Re-draw room strokes that were covered by void cleanup */}
+        {solidRooms.map((room) => {
+          const colors = CATEGORY_COLORS[room.category] || CATEGORY_COLORS.wohnraum;
+          return (
+            <rect key={`stroke-${room.id}`}
+              x={toX(room.x)} y={toY(room.z)}
+              width={room.width * scale} height={room.depth * scale}
+              fill="none" stroke={colors.stroke} strokeWidth={1.5}
+            />
           );
         })}
 
