@@ -520,7 +520,7 @@ function Scene({
         maxDistance={60}
         enableDamping
         dampingFactor={0.05}
-        mouseButtons={{ LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }}
+        mouseButtons={{ LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.ROTATE, RIGHT: THREE.MOUSE.PAN }}
       />
     </>
   );
@@ -1008,7 +1008,7 @@ export default function BuildingEditor3D({ building, onChange }: BuildingEditor3
 
         {/* Keyboard hints */}
         <div className="absolute bottom-4 left-4 text-xs text-gray-500 bg-white/90 backdrop-blur rounded-lg px-3 py-2 space-y-0.5">
-          <div><kbd className="bg-gray-100 px-1 rounded">LMB</kbd> Drehen · <kbd className="bg-gray-100 px-1 rounded">RMB</kbd> Verschieben · <kbd className="bg-gray-100 px-1 rounded">Scroll</kbd> Zoom</div>
+          <div><kbd className="bg-gray-100 px-1 rounded">LMB</kbd> Raum greifen · <kbd className="bg-gray-100 px-1 rounded">MMB</kbd> Drehen · <kbd className="bg-gray-100 px-1 rounded">Scroll</kbd> Zoom</div>
           <div><kbd className="bg-gray-100 px-1 rounded">Pfeiltasten</kbd> Raum bewegen · <kbd className="bg-gray-100 px-1 rounded">Shift</kbd> größere Schritte</div>
           <div><kbd className="bg-gray-100 px-1 rounded">Del</kbd> Löschen · <kbd className="bg-gray-100 px-1 rounded">Esc</kbd> Abwählen · <kbd className="bg-gray-100 px-1 rounded">Ctrl+Z</kbd> Rückgängig</div>
         </div>
