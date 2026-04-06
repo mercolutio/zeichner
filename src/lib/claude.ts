@@ -85,7 +85,7 @@ async function callClaude(
   messages: Anthropic.Messages.MessageParam[]
 ): Promise<string> {
   const stream = await client.messages.stream({
-    model: "claude-opus-4-20250514",
+    model: "claude-sonnet-4-20250514",
     max_tokens: 16384,
     temperature: 0.2,
     system,

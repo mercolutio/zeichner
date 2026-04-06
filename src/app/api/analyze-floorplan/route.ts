@@ -147,8 +147,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: "Fehler bei der Analyse des Grundrisses" },
+      { error: `Fehler bei der Analyse: ${message}` },
       { status: 500 }
     );
   }
