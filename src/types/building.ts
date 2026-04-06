@@ -38,14 +38,12 @@ export interface FloorData {
   rooms: RoomData[];
 }
 
-export type RidgeDirection = "east-west" | "north-south";
-
 export interface RoofSegment {
   id: string;
   name: string;
   type: RoofType;
   pitchDegrees: number;
-  ridgeDirection: RidgeDirection;
+  rotation: number;   // Grad — Firstrichtung (0 = O-W, 90 = N-S, frei drehbar)
   x: number;
   z: number;
   width: number;
@@ -106,7 +104,7 @@ export function createRoofSegment(partial?: Partial<RoofSegment>): RoofSegment {
     name: "Hauptdach",
     type: "Satteldach",
     pitchDegrees: 35,
-    ridgeDirection: "east-west",
+    rotation: 0,
     x: 0,
     z: 0,
     width: 10,

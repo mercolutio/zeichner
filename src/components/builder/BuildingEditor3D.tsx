@@ -11,7 +11,6 @@ import {
   RoofType,
   RoomCategory,
   RoofSegment,
-  RidgeDirection,
   createRoom,
   createFloor,
   createRoofSegment,
@@ -299,11 +298,11 @@ function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown }: 
   onPointerDown: (e: ThreeEvent<PointerEvent>) => void;
 }) {
   const [hovered, setHovered] = useState(false);
-  const { type, pitchDegrees, ridgeDirection, x, z, width, depth } = segment;
+  const { type, pitchDegrees, rotation: rotDeg, x, z, width, depth } = segment;
 
-  const profileSpan = ridgeDirection === "east-west" ? width : depth;
-  const extrudeLength = ridgeDirection === "east-west" ? depth : width;
-  const roofHeight = type === "Flachdach" ? 0.2 : (profileSpan / 2) * Math.tan((pitchDegrees * Math.PI) / 180);
+  // Profile is always along width, extruded along depth, then rotated
+  const roofHeight = type === "Flachdach" ? 0.2 : (width / 2) * Math.tan((pitchDegrees * Math.PI) / 180);
+  const rotRad = (rotDeg * Math.PI) / 180;
 
   const cx = x + width / 2;
   const cz = z + depth / 2;
@@ -314,7 +313,7 @@ function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown }: 
   if (type === "Flachdach") {
     return (
       <group>
-        <mesh position={[cx, baseY + 0.1, cz]}
+        <mesh position={[cx, baseY + 0.1, cz]} rotation={[0, rotRad, 0]}
           onPointerDown={onPointerDown}
           onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}>
           <boxGeometry args={[width + 0.3, 0.2, depth + 0.3]} />
@@ -323,7 +322,7 @@ function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown }: 
         {selected && (
           <Html position={[cx, baseY + 0.5, cz]} center>
             <div className="bg-amber-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none">
-              {segment.name} · {width}×{depth}m
+              {segment.name} · {width}×{depth}m · {rotDeg}°
             </div>
           </Html>
         )}
@@ -333,43 +332,35 @@ function RoofSegment3D({ segment, baseY, selected, isDragging, onPointerDown }: 
 
   const shape = useMemo(() => {
     const s = new THREE.Shape();
-    const hw = profileSpan / 2 + 0.15;
+    const hw = width / 2 + 0.15;
     s.moveTo(-hw, 0);
     s.lineTo(0, roofHeight);
     s.lineTo(hw, 0);
     s.lineTo(-hw, 0);
     return s;
-  }, [profileSpan, roofHeight]);
+  }, [width, roofHeight]);
 
-  const extrudeSettings = useMemo(() => ({ depth: extrudeLength + 0.3, bevelEnabled: false }), [extrudeLength]);
-
-  const position: [number, number, number] = ridgeDirection === "east-west"
-    ? [cx, baseY, z - 0.15]
-    : [x - 0.15, baseY, cz];
-
-  const rotation: [number, number, number] = ridgeDirection === "east-west"
-    ? [0, 0, 0]
-    : [0, Math.PI / 2, 0];
+  const extrudeSettings = useMemo(() => ({ depth: depth + 0.3, bevelEnabled: false }), [depth]);
 
   return (
-    <group>
-      <mesh position={position} rotation={rotation}
+    <group position={[cx, 0, cz]} rotation={[0, rotRad, 0]}>
+      <mesh position={[0, baseY, -depth / 2 - 0.15]}
         onPointerDown={onPointerDown}
         onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}>
         <extrudeGeometry args={[shape, extrudeSettings]} />
         <meshStandardMaterial color={roofColor} opacity={opacity} transparent side={THREE.DoubleSide} />
       </mesh>
-      {/* Invisible click box for easier selection (extruded geometry is hard to click) */}
-      <mesh position={[cx, baseY + roofHeight / 2, cz]} visible={false}
+      {/* Invisible click box */}
+      <mesh position={[0, baseY + roofHeight / 2, 0]} visible={false}
         onPointerDown={onPointerDown}
         onPointerOver={() => setHovered(true)} onPointerOut={() => setHovered(false)}>
         <boxGeometry args={[width, roofHeight, depth]} />
         <meshBasicMaterial />
       </mesh>
       {selected && (
-        <Html position={[cx, baseY + roofHeight + 0.3, cz]} center>
+        <Html position={[0, baseY + roofHeight + 0.3, 0]} center>
           <div className="bg-amber-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap pointer-events-none">
-            {segment.name} · {width}×{depth}m · {pitchDegrees}°
+            {segment.name} · {width}×{depth}m · {pitchDegrees}° · ↻{rotDeg}°
           </div>
         </Html>
       )}
@@ -731,14 +722,7 @@ function SidePanel({
                 {seg.type !== "Flachdach" && (
                   <>
                     <input type="number" step="1" min="10" max="60" value={seg.pitchDegrees} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, pitchDegrees: +e.target.value || 35 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Neigung °" />
-                    <select
-                      value={seg.ridgeDirection}
-                      onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, ridgeDirection: e.target.value as RidgeDirection } : s) })}
-                      className="border rounded px-1 py-0.5 bg-white" title="Firstrichtung"
-                    >
-                      <option value="east-west">O-W</option>
-                      <option value="north-south">N-S</option>
-                    </select>
+                    <input type="number" step="5" min="0" max="360" value={seg.rotation} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, rotation: +e.target.value || 0 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Rotation °" />
                   </>
                 )}
               </div>

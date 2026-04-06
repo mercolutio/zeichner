@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { BuildingData, createBuilding } from "@/types/building";
 import { buildingToAnalysis } from "@/lib/building-to-analysis";
 import dynamic from "next/dynamic";
@@ -26,9 +26,27 @@ const BuildingEditor3D = dynamic(
 
 type Tab = "editor" | "sections" | "result";
 
+const STORAGE_KEY = "zeichner-building";
+
+function loadBuilding(): BuildingData {
+  if (typeof window === "undefined") return createBuilding();
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved) as BuildingData;
+  } catch { /* ignore */ }
+  return createBuilding();
+}
+
 export default function Home() {
-  const [building, setBuilding] = useState<BuildingData>(createBuilding);
+  const [building, setBuilding] = useState<BuildingData>(loadBuilding);
   const [activeTab, setActiveTab] = useState<Tab>("editor");
+
+  // Auto-save to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(building));
+    } catch { /* quota exceeded etc */ }
+  }, [building]);
 
   const analysis = buildingToAnalysis(building);
 
