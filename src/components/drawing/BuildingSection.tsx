@@ -279,31 +279,17 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
         }
       })}
 
-      {/* Total height dimension per roof segment (left side) */}
-      {building.roofSegments.length > 0 ? building.roofSegments.map((seg, i) => {
-        const peakH = calcRoofHeight(seg);
-        const topY = roofBaseY - toSvgH(peakH);
-        const totalHeightM = totalFloorH + peakH;
-        const x = bL - 30 - i * 28;
+      {/* Total height dimension (left side, ground to roof peak) */}
+      {(() => {
+        const topY = maxRoofH > 0 ? roofBaseY - toSvgH(maxRoofH) : roofBaseY;
+        const totalHeightM = totalFloorH + maxRoofH;
+        const x = bL - 30;
         return (
-          <g key={`th-${i}`}>
+          <g>
             <line x1={x} y1={topY} x2={x} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
             <line x1={x - 5} y1={topY} x2={x + 5} y2={topY} stroke="#dc2626" strokeWidth={0.5} />
             <line x1={x - 5} y1={groundY} x2={x + 5} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
             <text x={x - 3} y={(topY + groundY) / 2 + 3} textAnchor="end" fontSize={8} fill="#dc2626" fontWeight={600} fontFamily="Helvetica, Arial, sans-serif">
-              {totalHeightM.toFixed(2)} m
-            </text>
-          </g>
-        );
-      }) : (() => {
-        const totalHeightM = totalFloorH;
-        const x = bL - 30;
-        return (
-          <g>
-            <line x1={x} y1={roofBaseY} x2={x} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
-            <line x1={x - 5} y1={roofBaseY} x2={x + 5} y2={roofBaseY} stroke="#dc2626" strokeWidth={0.5} />
-            <line x1={x - 5} y1={groundY} x2={x + 5} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
-            <text x={x - 3} y={(roofBaseY + groundY) / 2 + 3} textAnchor="end" fontSize={8} fill="#dc2626" fontWeight={600} fontFamily="Helvetica, Arial, sans-serif">
               {totalHeightM.toFixed(2)} m
             </text>
           </g>
