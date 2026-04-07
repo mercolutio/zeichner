@@ -54,11 +54,16 @@ export interface RoofSegment {
   depth: number;
 }
 
-/** Dachhöhe berechnen — entweder explizit oder aus Neigungswinkel */
+/** Dachhöhe berechnen — entweder explizit oder aus Neigungswinkel.
+ *  Die Spannweite senkrecht zum First bestimmt die Höhe.
+ *  rotation=0 → First in X (O-W), Traufseite = depth
+ *  rotation=90 → First in Z (N-S), Traufseite = width */
 export function roofHeight(seg: RoofSegment): number {
   if (seg.type === "Flachdach") return 0.2;
   if (seg.height != null && seg.height > 0) return seg.height;
-  return (seg.width / 2) * Math.tan((seg.pitchDegrees * Math.PI) / 180);
+  const rotRad = ((seg.rotation % 360) * Math.PI) / 180;
+  const span = Math.abs(seg.depth * Math.cos(rotRad)) + Math.abs(seg.width * Math.sin(rotRad));
+  return (span / 2) * Math.tan((seg.pitchDegrees * Math.PI) / 180);
 }
 
 export interface BuildingData {
