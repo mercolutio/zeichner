@@ -279,31 +279,19 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
         }
       })}
 
-      {/* Total height dimension per roof segment (left side) */}
-      {building.roofSegments.length > 0 ? building.roofSegments.map((seg, i) => {
-        const peakH = Math.min(calcRoofHeight(seg), maxRoofH);
-        const topY = roofBaseY - toSvgH(peakH);
-        const totalHeightM = totalFloorH + peakH;
-        const x = bL - 30 - i * 28;
+      {/* Total height dimension (left side, ground to roof peak) */}
+      {(() => {
+        const topY = maxRoofH > 0 ? roofBaseY - toSvgH(maxRoofH) : roofBaseY;
+        // Gesamthöhe = Summe Deckenhöhen + Dachhöhe (visuell konsistent)
+        const totalHeightM = totalFloorH + maxRoofH;
+        const x = bL - 30;
         return (
-          <g key={`th-${i}`}>
+          <g>
             <line x1={x} y1={topY} x2={x} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
             <line x1={x - 5} y1={topY} x2={x + 5} y2={topY} stroke="#dc2626" strokeWidth={0.5} />
             <line x1={x - 5} y1={groundY} x2={x + 5} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
             <text x={x - 3} y={(topY + groundY) / 2 + 3} textAnchor="end" fontSize={8} fill="#dc2626" fontWeight={600} fontFamily="Helvetica, Arial, sans-serif">
               {totalHeightM.toFixed(2)} m
-            </text>
-          </g>
-        );
-      }) : (() => {
-        const x = bL - 30;
-        return (
-          <g>
-            <line x1={x} y1={roofBaseY} x2={x} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
-            <line x1={x - 5} y1={roofBaseY} x2={x + 5} y2={roofBaseY} stroke="#dc2626" strokeWidth={0.5} />
-            <line x1={x - 5} y1={groundY} x2={x + 5} y2={groundY} stroke="#dc2626" strokeWidth={0.5} />
-            <text x={x - 3} y={(roofBaseY + groundY) / 2 + 3} textAnchor="end" fontSize={8} fill="#dc2626" fontWeight={600} fontFamily="Helvetica, Arial, sans-serif">
-              {totalFloorH.toFixed(2)} m
             </text>
           </g>
         );
@@ -332,11 +320,49 @@ export default function BuildingSection({ building, onChange }: { building: Buil
   const crossLabel = building.sectionLabelCross ?? "Querschnitt (Ost-West)";
   const longLabel = building.sectionLabelLong ?? "Längsschnitt (Nord-Süd)";
 
+  const handleExportPdf = () => {
+    const el = document.getElementById("building-sections");
+    if (!el) return;
+    // SVGs direkt aus dem DOM als PDF-druckbare Seite
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+    printWindow.document.write(`<!DOCTYPE html><html><head><title>Gebäudeschnitte</title><style>
+      @page { size: A4 landscape; margin: 15mm; }
+      body { margin: 0; font-family: Helvetica, Arial, sans-serif; }
+      .section { page-break-inside: avoid; margin-bottom: 20px; }
+      h4 { font-size: 12px; color: #555; margin: 0 0 4px; }
+    </style></head><body>`);
+    printWindow.document.write(el.innerHTML);
+    printWindow.document.write("</body></html>");
+    printWindow.document.close();
+    printWindow.onload = () => { printWindow.print(); };
+  };
+
   return (
     <div className="bg-white rounded-xl border shadow-sm p-5">
-      <h3 className="font-semibold text-gray-800 mb-1">Gebäudeschnitte</h3>
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="font-semibold text-gray-800">Gebäudeschnitte</h3>
+        <button
+          onClick={handleExportPdf}
+          className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition"
+        >
+          PDF Export
+        </button>
+      </div>
       <p className="text-xs text-gray-500 mb-4">Querschnitt und Längsschnitt durch die Gebäudemitte</p>
-      <div className="space-y-6">
+
+      {/* Debug: Dach-Werte */}
+      {building.roofSegments.length > 0 && (
+        <div className="text-[10px] text-orange-500 mb-2">
+          {building.roofSegments.map((seg, i) => (
+            <span key={i} className="mr-3">
+              Dach {i + 1}: w={seg.width} h={seg.height ?? "auto"} pitch={seg.pitchDegrees}° → {calcRoofHeight(seg).toFixed(2)}m
+            </span>
+          ))}
+        </div>
+      )}
+
+      <div id="building-sections" className="space-y-6">
         <div>
           <input
             className="text-sm font-medium text-gray-600 mb-2 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full"

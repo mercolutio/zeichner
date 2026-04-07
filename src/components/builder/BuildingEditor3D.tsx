@@ -873,7 +873,7 @@ function SidePanel({
               <div className="grid grid-cols-4 gap-1">
                 <input type="number" step="0.1" value={seg.x} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, x: +e.target.value } : s) })} className="border rounded px-1 py-0.5 text-right" title="X" />
                 <input type="number" step="0.1" value={seg.z} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, z: +e.target.value } : s) })} className="border rounded px-1 py-0.5 text-right" title="Z" />
-                <input type="number" step="0.1" value={seg.width} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, width: +e.target.value || 1 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Breite" />
+                <input type="number" step="0.1" value={seg.width} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, width: +e.target.value || 1, height: undefined } : s) })} className="border rounded px-1 py-0.5 text-right" title="Breite" />
                 <input type="number" step="0.1" value={seg.depth} onChange={(e) => onChange({ ...building, roofSegments: building.roofSegments.map((s) => s.id === seg.id ? { ...s, depth: +e.target.value || 1 } : s) })} className="border rounded px-1 py-0.5 text-right" title="Tiefe" />
               </div>
               <div className="flex gap-1 text-[10px] text-gray-400">
