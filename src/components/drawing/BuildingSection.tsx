@@ -53,7 +53,7 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
 
   const svgW = 750;
   const svgH = 400;
-  const margin = { top: 40, right: 60, bottom: 50, left: 60 };
+  const margin = { top: 40, right: 60, bottom: 50, left: 80 };
 
   const totalFloorH = sortedFloors.reduce((s, f) => s + f.ceilingHeight, 0);
 
