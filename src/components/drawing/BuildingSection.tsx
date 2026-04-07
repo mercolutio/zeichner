@@ -184,11 +184,6 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
                       {rl.room.name}
                     </text>
                   )}
-                  {rw > 40 && (
-                    <text x={rx + rw / 2} y={ry + rh / 2 + 10} textAnchor="middle" fontSize={7} fill="#9ca3af" fontFamily="Helvetica, Arial, sans-serif">
-                      {roomArea(rl.room).toFixed(1)} m²
-                    </text>
-                  )}
                 </g>
               );
             })}
