@@ -312,9 +312,12 @@ function SectionView({ building, direction, cutPosition, label }: SectionViewPro
   );
 }
 
-export default function BuildingSection({ building }: { building: BuildingData }) {
+export default function BuildingSection({ building, onChange }: { building: BuildingData; onChange?: (b: BuildingData) => void }) {
   const bW = buildingWidth(building);
   const bD = buildingDepth(building);
+
+  const crossLabel = building.sectionLabelCross ?? "Querschnitt (Ost-West)";
+  const longLabel = building.sectionLabelLong ?? "Längsschnitt (Nord-Süd)";
 
   return (
     <div className="bg-white rounded-xl border shadow-sm p-5">
@@ -322,11 +325,19 @@ export default function BuildingSection({ building }: { building: BuildingData }
       <p className="text-xs text-gray-500 mb-4">Querschnitt und Längsschnitt durch die Gebäudemitte</p>
       <div className="space-y-6">
         <div>
-          <h4 className="text-sm font-medium text-gray-600 mb-2">Querschnitt (Ost-West)</h4>
+          <input
+            className="text-sm font-medium text-gray-600 mb-2 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full"
+            value={crossLabel}
+            onChange={(e) => onChange?.({ ...building, sectionLabelCross: e.target.value })}
+          />
           <SectionView building={building} direction="width" cutPosition={bD / 2} label="SCHNITT A-A" />
         </div>
         <div>
-          <h4 className="text-sm font-medium text-gray-600 mb-2">Längsschnitt (Nord-Süd)</h4>
+          <input
+            className="text-sm font-medium text-gray-600 mb-2 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none w-full"
+            value={longLabel}
+            onChange={(e) => onChange?.({ ...building, sectionLabelLong: e.target.value })}
+          />
           <SectionView building={building} direction="depth" cutPosition={bW / 2} label="SCHNITT B-B" />
         </div>
       </div>

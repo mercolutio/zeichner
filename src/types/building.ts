@@ -66,6 +66,8 @@ export interface BuildingData {
   floors: FloorData[];
   roofSegments: RoofSegment[];
   address?: string;
+  sectionLabelCross?: string;   // Label für Querschnitt (z.B. "Querschnitt (Ost-West)")
+  sectionLabelLong?: string;    // Label für Längsschnitt (z.B. "Längsschnitt (Nord-Süd)")
   // Legacy compat
   roofType: RoofType;
   roofPitchDegrees: number;

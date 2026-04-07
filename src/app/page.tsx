@@ -127,7 +127,7 @@ export default function Home() {
             <div className="max-w-3xl mx-auto space-y-6">
               <h2 className="text-2xl font-bold text-gray-900">Grundrisse</h2>
               <FloorplanView building={building} />
-              <BuildingSection building={building} />
+              <BuildingSection building={building} onChange={setBuilding} />
             </div>
           </div>
         )}
